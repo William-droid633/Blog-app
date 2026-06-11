@@ -1,0 +1,5 @@
+# Configuration Cloudflare Pages pour Next.js (@cloudflare/next-on-pages)
+name = "herkul"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
