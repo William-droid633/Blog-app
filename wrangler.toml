@@ -3,3 +3,12 @@ name = "herkul"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".vercel/output/static"
+
+# Variables publiques (exposées au navigateur par Next.js, protégées par le
+# Row Level Security côté Supabase). Quand wrangler.toml est présent,
+# Cloudflare Pages ignore les variables du tableau de bord pendant le build :
+# elles doivent donc être déclarées ici. La clé service_role, elle, reste un
+# Secret dans le tableau de bord — jamais dans ce fichier.
+[vars]
+NEXT_PUBLIC_SUPABASE_URL = "https://uobnoliqvmqqlbyaqwqs.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvYm5vbGlxdm1xcWxieWFxd3FzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDA1OTIsImV4cCI6MjA5Njc3NjU5Mn0.SMDeSygJVTajtBKaLPWfZ3x9X_u9fdcSUCiVsFWQQ5Y"
