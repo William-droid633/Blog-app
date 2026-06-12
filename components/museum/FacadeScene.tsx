@@ -2,259 +2,434 @@
 
 import { useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
+import { Html, Instances, Instance, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import {
-  marbleTexture,
+  marbleSurface,
+  travertineSurface,
+  bronzeSurface,
+  esplanadeSurface,
   fluteTexture,
-  floorTexture,
   starPositions,
+  setRepeat,
+  type SurfaceMaps,
 } from "./textures";
 
-/* — Proportions du temple (hexastyle) — */
-const COLUMN_HEIGHT = 7;
-const COLUMN_RADIUS = 0.45;
-const COLUMN_COUNT = 6;
-const TEMPLE_WIDTH = 15;
-const PODIUM_HEIGHT = 1.6;
-const ENTABLATURE_HEIGHT = 1.3;
-const PEDIMENT_HEIGHT = 2.6;
+/* — Proportions monumentales (octastyle) — */
+const COLUMN_COUNT = 8;
+const COLUMN_HEIGHT = 9.4;
+const COLUMN_RADIUS = 0.52;
+const TEMPLE_WIDTH = 22;
+const PODIUM_HEIGHT = 1.96;
+const ENTABLATURE_HEIGHT = 1.7;
+const PEDIMENT_HEIGHT = 3.4;
+const PORCH_DEPTH = 5;
+
+const ENTAB_Y = PODIUM_HEIGHT + 0.5 + COLUMN_HEIGHT + 0.42;
+
+function glowCanvas(color: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+  const gradient = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 128, 128);
+  return canvas;
+}
 
 function Stars() {
-  const positions = useMemo(() => starPositions(1400, 90), []);
+  const positions = useMemo(() => starPositions(1800, 110), []);
   return (
     <points>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial size={0.16} color="#e9e4d4" transparent opacity={0.85} sizeAttenuation depthWrite={false} />
+      <pointsMaterial size={0.2} color="#e9e4d4" transparent opacity={0.85} sizeAttenuation depthWrite={false} />
     </points>
   );
 }
 
-function Column({ x, marble, flutes }: { x: number; marble: THREE.Texture; flutes: THREE.Texture }) {
-  const y = PODIUM_HEIGHT;
+function Moon() {
+  const texture = useMemo(() => {
+    const t = new THREE.CanvasTexture(glowCanvas("rgba(214, 226, 248, 0.9)"));
+    return t;
+  }, []);
   return (
-    <group position={[x, y, 0]}>
-      {/* Plinthe et base */}
-      <mesh position={[0, 0.12, 0]}>
-        <boxGeometry args={[COLUMN_RADIUS * 3, 0.24, COLUMN_RADIUS * 3]} />
-        <meshStandardMaterial map={marble} roughness={0.6} />
+    <group position={[-34, 40, -52]}>
+      <mesh>
+        <circleGeometry args={[3.2, 40]} />
+        <meshBasicMaterial color="#e6edf8" fog={false} />
       </mesh>
-      <mesh position={[0, 0.34, 0]}>
-        <cylinderGeometry args={[COLUMN_RADIUS * 1.25, COLUMN_RADIUS * 1.42, 0.22, 28]} />
-        <meshStandardMaterial map={marble} roughness={0.55} />
+      <sprite scale={[16, 16, 1]}>
+        <spriteMaterial map={texture} transparent opacity={0.55} depthWrite={false} />
+      </sprite>
+    </group>
+  );
+}
+
+function Column({
+  x,
+  z,
+  marble,
+  flutes,
+}: {
+  x: number;
+  z: number;
+  marble: SurfaceMaps;
+  flutes: THREE.Texture;
+}) {
+  return (
+    <group position={[x, PODIUM_HEIGHT, z]}>
+      <mesh position={[0, 0.14, 0]} castShadow receiveShadow>
+        <boxGeometry args={[COLUMN_RADIUS * 3, 0.28, COLUMN_RADIUS * 3]} />
+        <meshStandardMaterial {...marble} bumpScale={0.6} />
       </mesh>
-      {/* Fût cannelé, légèrement galbé (entasis) */}
-      <mesh position={[0, 0.45 + COLUMN_HEIGHT / 2, 0]}>
-        <cylinderGeometry args={[COLUMN_RADIUS * 0.86, COLUMN_RADIUS, COLUMN_HEIGHT, 36]} />
+      <mesh position={[0, 0.4, 0]} castShadow>
+        <cylinderGeometry args={[COLUMN_RADIUS * 1.26, COLUMN_RADIUS * 1.44, 0.24, 28]} />
+        <meshStandardMaterial {...marble} bumpScale={0.6} />
+      </mesh>
+      {/* Fût cannelé avec entasis */}
+      <mesh position={[0, 0.52 + COLUMN_HEIGHT / 2, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[COLUMN_RADIUS * 0.84, COLUMN_RADIUS, COLUMN_HEIGHT, 40]} />
         <meshStandardMaterial
-          map={marble}
+          map={marble.map}
+          roughnessMap={marble.roughnessMap}
           bumpMap={flutes}
-          bumpScale={0.022}
-          roughness={0.58}
+          bumpScale={1.6}
         />
       </mesh>
-      {/* Chapiteau toscan */}
-      <mesh position={[0, 0.45 + COLUMN_HEIGHT + 0.1, 0]}>
-        <cylinderGeometry args={[COLUMN_RADIUS * 1.22, COLUMN_RADIUS * 0.88, 0.22, 28]} />
-        <meshStandardMaterial map={marble} roughness={0.55} />
+      <mesh position={[0, 0.52 + COLUMN_HEIGHT + 0.11, 0]} castShadow>
+        <cylinderGeometry args={[COLUMN_RADIUS * 1.24, COLUMN_RADIUS * 0.86, 0.24, 28]} />
+        <meshStandardMaterial {...marble} bumpScale={0.6} />
       </mesh>
-      <mesh position={[0, 0.45 + COLUMN_HEIGHT + 0.28, 0]}>
-        <boxGeometry args={[COLUMN_RADIUS * 2.7, 0.16, COLUMN_RADIUS * 2.7]} />
-        <meshStandardMaterial map={marble} roughness={0.6} />
+      <mesh position={[0, 0.52 + COLUMN_HEIGHT + 0.31, 0]} castShadow>
+        <boxGeometry args={[COLUMN_RADIUS * 2.8, 0.18, COLUMN_RADIUS * 2.8]} />
+        <meshStandardMaterial {...marble} bumpScale={0.6} />
       </mesh>
     </group>
   );
 }
 
-function Pediment({ marble }: { marble: THREE.Texture }) {
+function Pediment({ marble }: { marble: SurfaceMaps }) {
   const geometry = useMemo(() => {
     const shape = new THREE.Shape();
-    shape.moveTo(-TEMPLE_WIDTH / 2 - 0.4, 0);
-    shape.lineTo(TEMPLE_WIDTH / 2 + 0.4, 0);
+    shape.moveTo(-TEMPLE_WIDTH / 2 - 0.6, 0);
+    shape.lineTo(TEMPLE_WIDTH / 2 + 0.6, 0);
     shape.lineTo(0, PEDIMENT_HEIGHT);
     shape.closePath();
-    return new THREE.ExtrudeGeometry(shape, { depth: 1.6, bevelEnabled: false });
+    return new THREE.ExtrudeGeometry(shape, { depth: 2, bevelEnabled: false });
   }, []);
 
-  const y = PODIUM_HEIGHT + 0.45 + COLUMN_HEIGHT + 0.36 + ENTABLATURE_HEIGHT;
+  const y = ENTAB_Y + ENTABLATURE_HEIGHT;
+  const slopeAngle = Math.atan2(PEDIMENT_HEIGHT, TEMPLE_WIDTH / 2 + 0.6);
+  const slopeLength = Math.hypot(PEDIMENT_HEIGHT, TEMPLE_WIDTH / 2 + 0.6) + 0.6;
 
   return (
-    <mesh geometry={geometry} position={[0, y, -0.8]}>
-      <meshStandardMaterial map={marble} roughness={0.62} />
-    </mesh>
+    <group position={[0, y, -1]}>
+      <mesh geometry={geometry} castShadow receiveShadow>
+        <meshStandardMaterial {...marble} bumpScale={0.6} />
+      </mesh>
+      {/* Corniches rampantes */}
+      <mesh
+        position={[-(TEMPLE_WIDTH / 4 + 0.15), PEDIMENT_HEIGHT / 2 + 0.18, 1.06]}
+        rotation={[0, 0, slopeAngle]}
+        castShadow
+      >
+        <boxGeometry args={[slopeLength, 0.34, 2.4]} />
+        <meshStandardMaterial {...marble} bumpScale={0.6} />
+      </mesh>
+      <mesh
+        position={[TEMPLE_WIDTH / 4 + 0.15, PEDIMENT_HEIGHT / 2 + 0.18, 1.06]}
+        rotation={[0, 0, -slopeAngle]}
+        castShadow
+      >
+        <boxGeometry args={[slopeLength, 0.34, 2.4]} />
+        <meshStandardMaterial {...marble} bumpScale={0.6} />
+      </mesh>
+      {/* Relief du tympan : couronne de laurier en bronze */}
+      <group position={[0, PEDIMENT_HEIGHT * 0.36, 2.04]}>
+        <mesh>
+          <torusGeometry args={[0.95, 0.13, 12, 40]} />
+          <meshStandardMaterial color="#6d4f24" metalness={0.85} roughness={0.4} />
+        </mesh>
+        <mesh>
+          <circleGeometry args={[0.4, 24]} />
+          <meshStandardMaterial color="#56401f" metalness={0.8} roughness={0.45} />
+        </mesh>
+      </group>
+      {/* Acrotères */}
+      {[[-TEMPLE_WIDTH / 2 - 0.4, 0.34], [0, PEDIMENT_HEIGHT + 0.32], [TEMPLE_WIDTH / 2 + 0.4, 0.34]].map(
+        ([x, ay], i) => (
+          <mesh key={i} position={[x, ay, 1]} castShadow>
+            <sphereGeometry args={[0.34, 14, 10]} />
+            <meshStandardMaterial {...marble} bumpScale={0.6} />
+          </mesh>
+        )
+      )}
+    </group>
+  );
+}
+
+function Dentils({ width, y, z }: { width: number; y: number; z: number }) {
+  const count = Math.floor(width / 0.52);
+  const xs = useMemo(
+    () => Array.from({ length: count }, (_, i) => -width / 2 + 0.26 + i * 0.52),
+    [count, width]
+  );
+  return (
+    <Instances limit={count} castShadow>
+      <boxGeometry args={[0.28, 0.22, 0.34]} />
+      <meshStandardMaterial color="#cfc7b2" roughness={0.62} />
+      {xs.map((x) => (
+        <Instance key={x} position={[x, y, z]} />
+      ))}
+    </Instances>
   );
 }
 
 function Torch({ x, z }: { x: number; z: number }) {
   const light = useRef<THREE.PointLight>(null);
   const flame = useRef<THREE.Mesh>(null);
+  const halo = useMemo(() => new THREE.CanvasTexture(glowCanvas("rgba(255, 166, 64, 0.85)")), []);
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    const flicker = 0.82 + Math.sin(t * 9 + x) * 0.1 + Math.sin(t * 23 + x * 2) * 0.08;
-    if (light.current) light.current.intensity = 14 * flicker;
-    if (flame.current) flame.current.scale.setScalar(0.9 + flicker * 0.15);
+    const flicker = 0.8 + Math.sin(t * 9 + x) * 0.12 + Math.sin(t * 23 + x * 2) * 0.08;
+    if (light.current) light.current.intensity = 22 * flicker;
+    if (flame.current) flame.current.scale.set(0.9 + flicker * 0.15, 0.85 + flicker * 0.3, 0.9 + flicker * 0.15);
   });
 
   return (
-    <group position={[x, PODIUM_HEIGHT + 2.4, z]}>
-      {/* Vasque */}
-      <mesh position={[0, -0.18, 0]}>
-        <cylinderGeometry args={[0.22, 0.1, 0.3, 16]} />
-        <meshStandardMaterial color="#3d2f1d" metalness={0.7} roughness={0.4} />
+    <group position={[x, PODIUM_HEIGHT + 2.8, z]}>
+      <mesh position={[0, -0.2, 0]} castShadow>
+        <cylinderGeometry args={[0.26, 0.12, 0.34, 16]} />
+        <meshStandardMaterial color="#3d2f1d" metalness={0.75} roughness={0.4} />
       </mesh>
-      {/* Pied */}
-      <mesh position={[0, -1.3, 0]}>
-        <cylinderGeometry args={[0.05, 0.08, 2, 10]} />
-        <meshStandardMaterial color="#3d2f1d" metalness={0.7} roughness={0.4} />
+      <mesh position={[0, -1.6, 0]} castShadow>
+        <cylinderGeometry args={[0.06, 0.1, 2.6, 10]} />
+        <meshStandardMaterial color="#3d2f1d" metalness={0.75} roughness={0.4} />
       </mesh>
-      {/* Flamme */}
-      <mesh ref={flame} position={[0, 0.12, 0]}>
-        <coneGeometry args={[0.16, 0.5, 10]} />
-        <meshBasicMaterial color="#ffb347" transparent opacity={0.9} />
+      <mesh ref={flame} position={[0, 0.16, 0]}>
+        <coneGeometry args={[0.18, 0.6, 10]} />
+        <meshBasicMaterial color="#ffb347" transparent opacity={0.92} />
       </mesh>
-      <pointLight ref={light} color="#ff9d45" intensity={14} distance={14} decay={2} />
+      <sprite scale={[1.6, 1.6, 1]} position={[0, 0.2, 0]}>
+        <spriteMaterial map={halo} transparent opacity={0.5} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </sprite>
+      <pointLight ref={light} color="#ff9d45" intensity={22} distance={18} decay={2} />
+    </group>
+  );
+}
+
+function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
+  return (
+    <group position={[x, 0, z]}>
+      <mesh position={[0, height / 2, 0]} castShadow>
+        <coneGeometry args={[height * 0.14, height, 8]} />
+        <meshStandardMaterial color="#0e1a10" roughness={0.95} />
+      </mesh>
     </group>
   );
 }
 
 /**
- * Façade du temple, de nuit : podium, six colonnes cannelées,
- * architrave gravée HERKVL, fronton, grandes portes de bronze
- * d'où filtre une lumière chaude, torches vivantes, ciel étoilé.
+ * Façade monumentale du temple, de nuit : huit colonnes cannelées sur
+ * podium à grand escalier, entablement denticulé, fronton à acrotères,
+ * portes de bronze patiné entrouvertes, torches, lune, cyprès et
+ * vestiges épars. Ombres portées réelles par clair de lune.
  */
-export default function FacadeScene({ entering }: { entering: boolean }) {
+export default function FacadeScene({
+  entering,
+  highQuality,
+}: {
+  entering: boolean;
+  highQuality: boolean;
+}) {
   const { camera } = useThree();
-  const marble = useMemo(() => marbleTexture(), []);
-  const marbleWall = useMemo(() => {
-    const t = marbleTexture("#cfc7b2", "#8f8469");
-    t.repeat.set(3, 2);
-    return t;
-  }, []);
+
+  const marble = useMemo(() => marbleSurface(), []);
+  const marbleWall = useMemo(() => setRepeat(travertineSurface(), 4, 2.4), []);
+  const bronze = useMemo(() => bronzeSurface(), []);
+  const esplanade = useMemo(() => setRepeat(esplanadeSurface(), 9, 9), []);
   const flutes = useMemo(() => {
     const t = fluteTexture();
-    t.repeat.set(3, 1);
+    t.repeat.set(4, 1);
     return t;
   }, []);
-  const ground = useMemo(() => {
-    const t = floorTexture();
-    t.repeat.set(10, 10);
-    return t;
-  }, []);
+  const doorGlow = useMemo(() => new THREE.CanvasTexture(glowCanvas("rgba(255, 206, 138, 0.9)")), []);
 
-  useFrame(({ pointer }, delta) => {
+  useFrame(({ pointer, clock }, delta) => {
     if (entering) {
-      // Traversée de la porte
       camera.position.x = THREE.MathUtils.damp(camera.position.x, 0, 2.2, delta);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, PODIUM_HEIGHT + 1.9, 2.2, delta);
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, 0.4, 1.6, delta);
-      camera.lookAt(0, PODIUM_HEIGHT + 1.9, -4);
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, PODIUM_HEIGHT + 3.2, 1.8, delta);
+      camera.position.z = THREE.MathUtils.damp(camera.position.z, 0.6, 1.5, delta);
+      camera.lookAt(0, PODIUM_HEIGHT + 3, -8);
     } else {
-      // Contemplation avec légère parallaxe
-      camera.position.x = THREE.MathUtils.damp(camera.position.x, pointer.x * 1.4, 1.5, delta);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, 4.4 + pointer.y * 0.7, 1.5, delta);
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, 17, 1.5, delta);
-      camera.lookAt(0, 4.6, 0);
+      const breathe = Math.sin(clock.elapsedTime * 0.4) * 0.1;
+      camera.position.x = THREE.MathUtils.damp(camera.position.x, pointer.x * 1.8, 1.4, delta);
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, 2.1 + breathe + pointer.y * 0.6, 1.4, delta);
+      camera.position.z = THREE.MathUtils.damp(camera.position.z, 25, 1.2, delta);
+      camera.lookAt(0, 9.2, 0);
     }
   });
 
-  const entablatureY = PODIUM_HEIGHT + 0.45 + COLUMN_HEIGHT + 0.36;
-  const columnXs = Array.from({ length: COLUMN_COUNT }, (_, i) => {
-    const span = TEMPLE_WIDTH - 2.4;
-    return -span / 2 + (span / (COLUMN_COUNT - 1)) * i;
-  });
+  const columnXs = useMemo(() => {
+    const span = TEMPLE_WIDTH - 3;
+    return Array.from({ length: COLUMN_COUNT }, (_, i) => -span / 2 + (span / (COLUMN_COUNT - 1)) * i);
+  }, []);
+
+  const doorY = PODIUM_HEIGHT + 3.3;
 
   return (
     <>
-      <color attach="background" args={["#070605"]} />
-      <fog attach="fog" args={["#070605", 22, 70]} />
+      <color attach="background" args={["#060708"]} />
+      <fog attach="fog" args={["#060708", 26, 95]} />
 
-      {/* Nuit : lune froide + ambiance */}
-      <ambientLight intensity={0.16} />
-      <directionalLight position={[-14, 22, 10]} color="#8fa3c8" intensity={0.5} />
+      {/* Réflexions d'environnement nocturne (procédural, sans réseau) */}
+      <Environment resolution={64} frames={1}>
+        <Lightformer intensity={1.2} color="#26334d" position={[0, 14, 0]} rotation-x={Math.PI / 2} scale={[40, 40, 1]} />
+        <Lightformer intensity={1.6} color="#e8cd9c" position={[0, 4, 12]} scale={[14, 6, 1]} />
+        <Lightformer intensity={0.7} color="#ff9d45" position={[-12, 2, 6]} scale={[5, 3, 1]} />
+      </Environment>
+
+      <ambientLight intensity={0.14} />
+      {/* Clair de lune : la source d'ombres */}
+      <directionalLight
+        castShadow={highQuality}
+        position={[-22, 34, 18]}
+        color="#93a7cc"
+        intensity={0.85}
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-26}
+        shadow-camera-right={26}
+        shadow-camera-top={26}
+        shadow-camera-bottom={-6}
+        shadow-camera-near={6}
+        shadow-camera-far={90}
+        shadow-bias={-0.0004}
+      />
       <Stars />
+      <Moon />
 
-      {/* Sol */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 4]}>
-        <planeGeometry args={[120, 120]} />
-        <meshStandardMaterial map={ground} roughness={0.85} />
+      {/* Esplanade dallée */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 8]} receiveShadow>
+        <planeGeometry args={[160, 160]} />
+        <meshStandardMaterial {...esplanade} bumpScale={0.8} />
       </mesh>
 
-      {/* Podium et emmarchement */}
-      {[0, 1, 2].map((i) => (
-        <mesh key={i} position={[0, 0.27 * (i + 0.5), 2.2 - i * 0.55]}>
-          <boxGeometry args={[TEMPLE_WIDTH + 3 - i * 0.8, 0.27, 7 + i * 1.1]} />
-          <meshStandardMaterial map={marble} roughness={0.65} />
+      {/* Grand escalier sur toute la largeur */}
+      {Array.from({ length: 7 }, (_, i) => (
+        <mesh key={i} position={[0, 0.14 + 0.28 * i, 5.4 - i * 0.62]} castShadow receiveShadow>
+          <boxGeometry args={[TEMPLE_WIDTH + 4.5 - i * 0.3, 0.28, 9.4 + i * 1.24 - i * 2.48]} />
+          <meshStandardMaterial {...marble} bumpScale={0.5} />
         </mesh>
       ))}
-      <mesh position={[0, PODIUM_HEIGHT / 2 + 0.4, -1.4]}>
-        <boxGeometry args={[TEMPLE_WIDTH + 1.6, PODIUM_HEIGHT - 0.8 + 0.81, 6.6]} />
-        <meshStandardMaterial map={marble} roughness={0.65} />
+      {/* Stylobate */}
+      <mesh position={[0, PODIUM_HEIGHT - 0.14, -1.8]} castShadow receiveShadow>
+        <boxGeometry args={[TEMPLE_WIDTH + 2.6, 0.28, 9.8]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      <mesh position={[0, (PODIUM_HEIGHT - 0.28) / 2, -2.6]} receiveShadow>
+        <boxGeometry args={[TEMPLE_WIDTH + 2, PODIUM_HEIGHT - 0.28, 8.2]} />
+        <meshStandardMaterial {...marbleWall} bumpScale={0.7} />
       </mesh>
 
-      {/* Colonnade */}
+      {/* Colonnade octostyle + colonnes d'angle du pronaos */}
       {columnXs.map((x) => (
-        <Column key={x} x={x} marble={marble} flutes={flutes} />
+        <Column key={x} x={x} z={0} marble={marble} flutes={flutes} />
+      ))}
+      {[columnXs[0], columnXs[COLUMN_COUNT - 1]].map((x, i) => (
+        <Column key={i} x={x} z={-2.6} marble={marble} flutes={flutes} />
       ))}
 
-      {/* Mur de la cella, en retrait */}
-      <mesh position={[0, PODIUM_HEIGHT + (COLUMN_HEIGHT + 0.8) / 2, -2.6]}>
-        <boxGeometry args={[TEMPLE_WIDTH - 1.2, COLUMN_HEIGHT + 0.8, 0.7]} />
-        <meshStandardMaterial map={marbleWall} roughness={0.7} />
+      {/* Plafond du pronaos */}
+      <mesh position={[0, ENTAB_Y + 0.1, -PORCH_DEPTH / 2]} receiveShadow>
+        <boxGeometry args={[TEMPLE_WIDTH, 0.3, PORCH_DEPTH + 1]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
 
-      {/* Encadrement de porte */}
-      <mesh position={[0, PODIUM_HEIGHT + 2.6, -2.2]}>
-        <boxGeometry args={[3.6, 5.2, 0.25]} />
-        <meshStandardMaterial map={marble} roughness={0.5} />
+      {/* Cella et murs latéraux (antae) */}
+      <mesh position={[0, PODIUM_HEIGHT + (COLUMN_HEIGHT + 1) / 2, -PORCH_DEPTH - 0.4]} receiveShadow>
+        <boxGeometry args={[TEMPLE_WIDTH - 1.4, COLUMN_HEIGHT + 1, 0.9]} />
+        <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
       </mesh>
-      {/* Portes de bronze entrouvertes */}
-      <mesh position={[-0.78, PODIUM_HEIGHT + 2.4, -2.12]} rotation={[0, 0.12, 0]}>
-        <boxGeometry args={[1.42, 4.6, 0.14]} />
-        <meshStandardMaterial color="#4a3417" metalness={0.85} roughness={0.42} />
+      {[-1, 1].map((side) => (
+        <mesh
+          key={side}
+          position={[side * (TEMPLE_WIDTH / 2 - 0.9), PODIUM_HEIGHT + (COLUMN_HEIGHT + 1) / 2, -PORCH_DEPTH / 2]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[0.8, COLUMN_HEIGHT + 1, PORCH_DEPTH + 1.2]} />
+          <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+        </mesh>
+      ))}
+
+      {/* Encadrement de porte monumental */}
+      <mesh position={[0, doorY, -PORCH_DEPTH + 0.12]} receiveShadow>
+        <boxGeometry args={[5.4, 7.4, 0.3]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
-      <mesh position={[0.78, PODIUM_HEIGHT + 2.4, -2.12]} rotation={[0, -0.12, 0]}>
-        <boxGeometry args={[1.42, 4.6, 0.14]} />
-        <meshStandardMaterial color="#4a3417" metalness={0.85} roughness={0.42} />
+      {/* Portes de bronze patiné, entrouvertes */}
+      <mesh position={[-1.15, doorY - 0.2, -PORCH_DEPTH + 0.26]} rotation={[0, 0.16, 0]} castShadow>
+        <boxGeometry args={[2.1, 6.6, 0.16]} />
+        <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
       </mesh>
+      <mesh position={[1.15, doorY - 0.2, -PORCH_DEPTH + 0.26]} rotation={[0, -0.16, 0]} castShadow>
+        <boxGeometry args={[2.1, 6.6, 0.16]} />
+        <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
+      </mesh>
+      {/* Clous de bronze */}
+      {[-1, 1].map((side) =>
+        [0, 1, 2, 3].map((row) => (
+          <mesh key={`${side}-${row}`} position={[side * 1.15, doorY - 2.4 + row * 1.5, -PORCH_DEPTH + 0.36]}>
+            <sphereGeometry args={[0.07, 10, 8]} />
+            <meshStandardMaterial color="#8a6530" metalness={0.9} roughness={0.3} />
+          </mesh>
+        ))
+      )}
       {/* Lumière dorée filtrant par l'entrebâillement */}
-      <mesh position={[0, PODIUM_HEIGHT + 2.3, -2.16]}>
-        <planeGeometry args={[0.24, 4.4]} />
-        <meshBasicMaterial color="#ffd9a0" transparent opacity={0.95} />
+      <mesh position={[0, doorY - 0.2, -PORCH_DEPTH + 0.3]}>
+        <planeGeometry args={[0.34, 6.3]} />
+        <meshBasicMaterial color="#ffd9a0" toneMapped={false} />
       </mesh>
-      <pointLight position={[0, PODIUM_HEIGHT + 2.3, -1.6]} color="#ffce8a" intensity={9} distance={9} decay={2} />
+      <sprite scale={[5, 8, 1]} position={[0, doorY - 0.4, -PORCH_DEPTH + 0.7]}>
+        <spriteMaterial map={doorGlow} transparent opacity={0.34} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </sprite>
+      <pointLight position={[0, doorY - 0.4, -PORCH_DEPTH + 1.6]} color="#ffce8a" intensity={20} distance={14} decay={2} />
 
-      {/* Entablement : architrave, frise gravée, corniche */}
-      <mesh position={[0, entablatureY + 0.25, -0.4]}>
-        <boxGeometry args={[TEMPLE_WIDTH, 0.5, 2.6]} />
-        <meshStandardMaterial map={marble} roughness={0.6} />
+      {/* Entablement : architrave à fasces, frise gravée, denticules, corniche */}
+      <mesh position={[0, ENTAB_Y + 0.3, -0.2]} castShadow receiveShadow>
+        <boxGeometry args={[TEMPLE_WIDTH, 0.6, 3]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
-      <mesh position={[0, entablatureY + 0.78, -0.4]}>
-        <boxGeometry args={[TEMPLE_WIDTH, 0.56, 2.5]} />
-        <meshStandardMaterial map={marble} roughness={0.6} />
+      <mesh position={[0, ENTAB_Y + 0.93, -0.2]} castShadow receiveShadow>
+        <boxGeometry args={[TEMPLE_WIDTH, 0.66, 2.9]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
-      <mesh position={[0, entablatureY + ENTABLATURE_HEIGHT - 0.09, -0.4]}>
-        <boxGeometry args={[TEMPLE_WIDTH + 0.8, 0.18, 3]} />
-        <meshStandardMaterial map={marble} roughness={0.6} />
+      <Dentils width={TEMPLE_WIDTH} y={ENTAB_Y + 1.37} z={1.36} />
+      <mesh position={[0, ENTAB_Y + ENTABLATURE_HEIGHT - 0.1, -0.2]} castShadow>
+        <boxGeometry args={[TEMPLE_WIDTH + 1, 0.2, 3.6]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
 
-      {/* Inscription monumentale sur la frise */}
+      {/* Inscription monumentale */}
       <Html
         transform
-        position={[0, entablatureY + 0.78, 0.88]}
-        scale={0.42}
+        position={[0, ENTAB_Y + 0.93, 1.28]}
+        scale={0.6}
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
         <div
           style={{
             fontFamily: "var(--font-display), Georgia, serif",
-            letterSpacing: "0.5em",
+            letterSpacing: "0.52em",
             fontWeight: 700,
-            fontSize: "28px",
-            color: "#8a6a3c",
-            textShadow: "0 1px 0 rgba(255,240,200,0.35), 0 -1px 1px rgba(0,0,0,0.6)",
+            fontSize: "30px",
+            color: "#9a7a45",
+            textShadow: "0 1px 0 rgba(255,240,200,0.3), 0 -2px 2px rgba(0,0,0,0.65)",
             whiteSpace: "nowrap",
           }}
         >
@@ -264,12 +439,27 @@ export default function FacadeScene({ entering }: { entering: boolean }) {
 
       <Pediment marble={marble} />
 
-      {/* Torches de part et d'autre de l'escalier */}
-      <Torch x={-TEMPLE_WIDTH / 2 - 1.6} z={4.4} />
-      <Torch x={TEMPLE_WIDTH / 2 + 1.6} z={4.4} />
+      {/* Torches du parvis */}
+      <Torch x={-TEMPLE_WIDTH / 2 - 2.2} z={6.2} />
+      <Torch x={TEMPLE_WIDTH / 2 + 2.2} z={6.2} />
 
-      {/* Lumière chaude générale montant du parvis */}
-      <pointLight position={[0, 2.5, 9]} color="#e8cd9c" intensity={10} distance={26} decay={2} />
+      {/* Cyprès et vestiges sur l'esplanade */}
+      <Cypress x={-TEMPLE_WIDTH / 2 - 9} z={-4} height={11} />
+      <Cypress x={-TEMPLE_WIDTH / 2 - 13} z={4} height={8.5} />
+      <Cypress x={TEMPLE_WIDTH / 2 + 10} z={-2} height={12} />
+      <Cypress x={TEMPLE_WIDTH / 2 + 14} z={6} height={9} />
+      {/* Tambour de colonne effondré */}
+      <mesh position={[12.5, 0.5, 12]} rotation={[0, 0.6, Math.PI / 2]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.55, 0.55, 1.9, 22]} />
+        <meshStandardMaterial {...marble} bumpScale={0.7} />
+      </mesh>
+      <mesh position={[-11.5, 0.32, 13.5]} rotation={[0.1, 0.9, 0.06]} castShadow receiveShadow>
+        <boxGeometry args={[1.5, 0.7, 1.1]} />
+        <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+      </mesh>
+
+      {/* Halo chaud montant du parvis */}
+      <pointLight position={[0, 3.5, 12]} color="#e8cd9c" intensity={12} distance={30} decay={2} />
     </>
   );
 }

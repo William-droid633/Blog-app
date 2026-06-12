@@ -187,9 +187,10 @@ export default function Museum3D({
       onTouchMove={handleTouchMove}
     >
       <Canvas
-        dpr={[1, 1.75]}
+        shadows={highQuality}
+        dpr={highQuality ? [1, 2] : [1, 1.5]}
         gl={{ antialias: true }}
-        camera={{ position: [0, 4.4, 17], fov: 55 }}
+        camera={{ position: [0, 2.1, 25], fov: 58 }}
         onCreated={() => setReady(true)}
         onPointerMissed={() => {
           setFocus((current) => (current && !current.diving ? null : current));
@@ -205,7 +206,7 @@ export default function Museum3D({
               highQuality={highQuality}
             />
           ) : (
-            <FacadeScene entering={phase === "entering"} />
+            <FacadeScene entering={phase === "entering"} highQuality={highQuality} />
           )}
         </Suspense>
       </Canvas>

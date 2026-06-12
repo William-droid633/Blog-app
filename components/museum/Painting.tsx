@@ -103,12 +103,18 @@ export default function Painting({
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
       {/* Moulure extérieure bronze */}
-      <mesh position={[0, 0, -0.015]}>
-        <boxGeometry args={[ART_WIDTH + 0.5, ART_HEIGHT + 0.5, 0.05]} />
+      <mesh position={[0, 0, -0.015]} castShadow>
+        <boxGeometry args={[ART_WIDTH + 0.6, ART_HEIGHT + 0.6, 0.05]} />
         <meshStandardMaterial color="#5d4322" metalness={0.7} roughness={0.45} />
+      </mesh>
+      {/* Filet doré intermédiaire */}
+      <mesh position={[0, 0, 0.01]}>
+        <boxGeometry args={[ART_WIDTH + 0.44, ART_HEIGHT + 0.44, 0.06]} />
+        <meshStandardMaterial color="#caa45e" metalness={0.85} roughness={0.25} />
       </mesh>
       {/* Cadre doré */}
       <mesh
+        castShadow
         onClick={(event) => {
           event.stopPropagation();
           if (event.delta > 8) return; // ignore les glissements
