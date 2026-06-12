@@ -102,37 +102,42 @@ export default function Painting({
     };
   }, [hovered]);
 
-  const active = hovered || focused;
-  const gold = active ? "#e6ce8e" : "#b8924f";
-  const goldDeep = active ? "#caa45e" : "#9a7a45";
-  const openW = ART_WIDTH - 0.04;
-  const openH = ART_HEIGHT - 0.04;
-  const BORDER = 0.34;
-  // Baguettes du cadre : haut/bas pleine largeur, gauche/droite ajustées.
-  const bars: Array<{ key: string; w: number; h: number; x: number; y: number }> = [
-    { key: "t", w: openW + BORDER * 2, h: BORDER, x: 0, y: openH / 2 + BORDER / 2 },
-    { key: "b", w: openW + BORDER * 2, h: BORDER, x: 0, y: -(openH / 2 + BORDER / 2) },
-    { key: "l", w: BORDER, h: openH, x: -(openW / 2 + BORDER / 2), y: 0 },
-    { key: "r", w: BORDER, h: openH, x: openW / 2 + BORDER / 2, y: 0 },
-  ];
-  const corners: Array<[number, number]> = [
-    [openW / 2 + BORDER / 2, openH / 2 + BORDER / 2],
-    [-(openW / 2 + BORDER / 2), openH / 2 + BORDER / 2],
-    [openW / 2 + BORDER / 2, -(openH / 2 + BORDER / 2)],
-    [-(openW / 2 + BORDER / 2), -(openH / 2 + BORDER / 2)],
-  ];
-
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
-      {/* Corps du cadre / fond (donne épaisseur et ombre portée) */}
-      <mesh position={[0, 0, -0.05]} castShadow receiveShadow>
-        <boxGeometry args={[openW + BORDER * 2 + 0.06, openH + BORDER * 2 + 0.06, 0.08]} />
-        <meshStandardMaterial color="#332715" metalness={0.45} roughness={0.55} />
+      {/* Moulure extérieure bronze */}
+      <mesh position={[0, 0, -0.015]} castShadow>
+        <boxGeometry args={[ART_WIDTH + 0.6, ART_HEIGHT + 0.6, 0.05]} />
+        <meshStandardMaterial color="#5d4322" metalness={0.7} roughness={0.45} />
       </mesh>
-
-      {/* Marie-louise (passe-partout crème), en retrait derrière la toile */}
-      <mesh position={[0, 0, 0.02]}>
-        <planeGeometry args={[ART_WIDTH + 0.04, ART_HEIGHT + 0.04]} />
+      {/* Filet doré intermédiaire */}
+      <mesh position={[0, 0, 0.01]}>
+        <boxGeometry args={[ART_WIDTH + 0.44, ART_HEIGHT + 0.44, 0.06]} />
+        <meshStandardMaterial color="#caa45e" metalness={0.85} roughness={0.25} />
+      </mesh>
+      {/* Cadre doré */}
+      <mesh
+        castShadow
+        onClick={(event) => {
+          event.stopPropagation();
+          if (event.delta > 8) return; // ignore les glissements
+          onSelect(index);
+        }}
+        onPointerOver={(event) => {
+          event.stopPropagation();
+          setHovered(true);
+        }}
+        onPointerOut={() => setHovered(false)}
+      >
+        <boxGeometry args={[ART_WIDTH + 0.3, ART_HEIGHT + 0.3, 0.09]} />
+        <meshStandardMaterial
+          color={hovered || focused ? "#d9b87a" : "#a8854a"}
+          metalness={0.78}
+          roughness={0.32}
+        />
+      </mesh>
+      {/* Marie-louise */}
+      <mesh position={[0, 0, 0.048]}>
+        <planeGeometry args={[ART_WIDTH + 0.02, ART_HEIGHT + 0.02]} />
         <meshStandardMaterial color="#efe7d4" roughness={0.85} />
       </mesh>
 
@@ -145,62 +150,18 @@ export default function Painting({
         )}
       </Suspense>
 
-      {/* Cadre profilé : quatre baguettes dorées à gorge interne */}
-      {bars.map((bar) => (
-        <group key={bar.key} position={[bar.x, bar.y, 0]}>
-          <mesh castShadow>
-            <boxGeometry args={[bar.w, bar.h, 0.18]} />
-            <meshStandardMaterial color={gold} metalness={0.85} roughness={0.28} />
-          </mesh>
-          {/* Gorge intérieure plus sombre (rebord vers la toile) */}
-          <mesh position={[0, 0, 0.07]}>
-            <boxGeometry args={[bar.w - 0.1, bar.h - 0.1, 0.06]} />
-            <meshStandardMaterial color={goldDeep} metalness={0.9} roughness={0.22} />
-          </mesh>
-        </group>
-      ))}
-      {/* Ornements d'angle */}
-      {corners.map(([cx, cy], i) => (
-        <mesh key={i} position={[cx, cy, 0.13]}>
-          <sphereGeometry args={[0.1, 14, 10]} />
-          <meshStandardMaterial color={active ? "#e6ce8e" : "#b8924f"} metalness={0.9} roughness={0.25} />
-        </mesh>
-      ))}
-
-      {/* Cible de clic / survol (plan transparent couvrant l'œuvre) */}
-      <mesh
-        position={[0, 0, 0.2]}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (event.delta > 8) return; // ignore les glissements
-          onSelect(index);
-        }}
-        onPointerOver={(event) => {
-          event.stopPropagation();
-          setHovered(true);
-        }}
-        onPointerOut={() => setHovered(false)}
-      >
-        <planeGeometry args={[openW + BORDER * 2, openH + BORDER * 2]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
-      </mesh>
-
       {/* Lampe de tableau */}
-      <mesh position={[0, ART_HEIGHT / 2 + 0.42, 0.26]} rotation={[0.5, 0, 0]}>
-        <cylinderGeometry args={[0.05, 0.05, 0.8, 10]} />
+      <mesh position={[0, ART_HEIGHT / 2 + 0.34, 0.16]} rotation={[0.5, 0, 0]}>
+        <cylinderGeometry args={[0.035, 0.035, 0.7, 8]} />
         <meshStandardMaterial color="#3d2f1d" metalness={0.8} roughness={0.35} />
       </mesh>
-      <mesh position={[0, ART_HEIGHT / 2 + 0.5, 0.62]} rotation={[1.15, 0, 0]}>
-        <cylinderGeometry args={[0.12, 0.16, 0.18, 12, 1, true]} />
-        <meshStandardMaterial color="#a8854a" metalness={0.85} roughness={0.3} side={THREE.DoubleSide} />
-      </mesh>
       {/* Faisceau lumineux */}
-      <mesh position={[0, 0.32, 0.3]}>
-        <planeGeometry args={[ART_WIDTH + 0.2, ART_HEIGHT + 1.0]} />
+      <mesh position={[0, 0.32, 0.22]}>
+        <planeGeometry args={[ART_WIDTH + 0.4, ART_HEIGHT + 1.1]} />
         <meshBasicMaterial
           map={beam}
           transparent
-          opacity={focused ? 0.5 : 0.28}
+          opacity={focused ? 0.55 : 0.34}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />

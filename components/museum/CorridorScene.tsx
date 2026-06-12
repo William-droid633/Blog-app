@@ -137,14 +137,14 @@ function EntranceFlare() {
 
   useFrame(({ clock, camera }) => {
     if (start.current === null) start.current = clock.elapsedTime;
-    const k = Math.max(0, 1 - (clock.elapsedTime - start.current) / 1.3);
+    const k = Math.max(0, 1 - (clock.elapsedTime - start.current) / 1.1);
     if (light.current) {
-      light.current.position.set(0, EYE_HEIGHT + 0.6, camera.position.z - 1.6);
-      light.current.intensity = k * k * 240;
+      light.current.position.set(0, EYE_HEIGHT + 0.6, camera.position.z - 1.8);
+      light.current.intensity = k * k * 140;
     }
   });
 
-  return <pointLight ref={light} color="#fff1d8" intensity={240} distance={28} decay={2} />;
+  return <pointLight ref={light} color="#fff1d8" intensity={140} distance={26} decay={2} />;
 }
 
 /** Lumières chaudes qui accompagnent le visiteur. */

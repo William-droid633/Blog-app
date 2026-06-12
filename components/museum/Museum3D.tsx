@@ -122,12 +122,12 @@ export default function Museum3D({
     setPhase("entering");
     // Le voile blanc n'arrive qu'au bout de l'approche, quand la lumière du
     // sanctuaire emplit déjà l'écran : la bascule reste imperceptible.
-    setTimeout(() => setFlash(true), 1700);
+    setTimeout(() => setFlash(true), 2000);
     setTimeout(() => {
       travelZ.current = START_Z;
       setPhase("corridor");
-      setTimeout(() => setFlash(false), 280);
-    }, 2200);
+      setTimeout(() => setFlash(false), 300);
+    }, 2400);
   }, []);
 
   const advance = useCallback(

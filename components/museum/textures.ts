@@ -388,91 +388,110 @@ function gaussian(): number {
 }
 
 /**
- * Voie lactée procédurale : une large bande diagonale de poussière
- * d'étoiles, ponctuée de nébuleuses colorées et d'un cœur galactique
- * lumineux. Rendu sur un seul canvas (additif, fond transparent) — donc
- * une unique surface dans la scène, très peu coûteuse.
+ * Voie lactée procédurale réaliste : la nébulosité de la bande est tirée
+ * d'un bruit fractal continu (et non d'un semis de points), traversée
+ * d'une bande de poussière sombre, avec un cœur galactique chaud et des
+ * bras bleutés teintés de rose. Des étoiles ponctuelles sont semées
+ * par-dessus, plus denses sur la bande. Rendu une seule fois sur un canvas
+ * (fond transparent) → une unique surface dans la scène.
  */
-export function galaxyTexture(size = 1024): THREE.CanvasTexture {
+export function galaxyTexture(size = 640): THREE.CanvasTexture {
   const [canvas, ctx] = makeCanvas(size);
-  ctx.clearRect(0, 0, size, size);
-  ctx.globalCompositeOperation = "lighter";
+  const angle = -0.42;
+  const ca = Math.cos(angle);
+  const sa = Math.sin(angle);
 
+  const blue: RGB = { r: 120, g: 150, b: 220 };
+  const warm: RGB = { r: 255, g: 218, b: 165 };
+  const pink: RGB = { r: 210, g: 140, b: 185 };
+
+  // Nébulosité continue par bruit fractal
+  const img = ctx.createImageData(size, size);
+  const data = img.data;
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      const u = px / size - 0.5;
+      const v = py / size - 0.5;
+      const along = u * ca + v * sa;
+      const perp = -u * sa + v * ca;
+
+      const clump = fbm(along * 3 + 11.3, perp * 7 + 4.1, 5);
+      const sigma = 0.08 + 0.08 * Math.abs(along);
+      let band = Math.exp(-(perp * perp) / (2 * sigma * sigma)) * (0.32 + clump * 1.15);
+
+      // Bande de poussière sombre, légèrement décalée et sinueuse
+      const dust =
+        Math.exp(-Math.pow((perp - 0.012) / 0.03, 2)) *
+        (0.5 + 0.6 * fbm(along * 4 + 2.7, perp * 9 + 1.3, 4));
+      band *= 1 - 0.85 * Math.min(1, dust);
+
+      // Cœur galactique
+      const core =
+        Math.exp(-(along * along) / (2 * 0.05 * 0.05)) *
+        Math.exp(-(perp * perp) / (2 * 0.05 * 0.05));
+
+      let intensity = band * 0.8 + core * 1.5;
+
+      // Fondu radial : disparition bien avant les bords du plan
+      const rad = Math.hypot(u, v);
+      intensity *= Math.max(0, 1 - Math.pow(rad / 0.5, 1.7));
+      intensity = Math.max(0, Math.min(1, intensity));
+
+      const warmth = Math.min(1, core * 1.6 + Math.max(0, 0.32 - Math.abs(along)) * 1.6);
+      const neb = Math.max(0, fbm(along * 5 + 30.2, perp * 5 + 12.7, 4) - 0.52) * 1.6;
+      let col = mix(blue, warm, warmth);
+      col = mix(col, pink, Math.min(0.5, neb));
+
+      const i = (py * size + px) * 4;
+      data[i] = col.r;
+      data[i + 1] = col.g;
+      data[i + 2] = col.b;
+      data[i + 3] = Math.round(intensity * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Étoiles ponctuelles, concentrées sur la bande (additif)
+  ctx.globalCompositeOperation = "lighter";
   const cx = size / 2;
   const cy = size / 2;
-  const angle = -0.42; // inclinaison de la bande galactique
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-
-  // Nébuleuses diffuses échelonnées le long de la bande
-  const nebulae: Array<{ along: number; col: [number, number, number]; r: number; a: number }> = [
-    { along: -0.34, col: [110, 70, 165], r: 0.34, a: 0.13 },
-    { along: -0.12, col: [55, 110, 165], r: 0.42, a: 0.12 },
-    { along: 0.0, col: [225, 205, 180], r: 0.26, a: 0.2 }, // cœur galactique chaud
-    { along: 0.15, col: [180, 85, 135], r: 0.36, a: 0.14 },
-    { along: 0.36, col: [70, 125, 155], r: 0.3, a: 0.11 },
-  ];
-  for (const n of nebulae) {
-    const px = cx + n.along * size * cos;
-    const py = cy + n.along * size * sin;
-    const grad = ctx.createRadialGradient(px, py, 2, px, py, n.r * size);
-    grad.addColorStop(0, `rgba(${n.col[0]},${n.col[1]},${n.col[2]},${n.a})`);
-    grad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.save();
-    ctx.translate(px, py);
-    ctx.rotate(angle);
-    ctx.scale(1, 0.5);
-    ctx.translate(-px, -py);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(px, py, n.r * size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Myriade d'étoiles concentrées sur la bande (gaussienne perpendiculaire)
-  const bandStars = 5200;
-  for (let i = 0; i < bandStars; i++) {
-    const along = (Math.random() - 0.5) * 1.02;
-    const perp = gaussian() * 0.11 * (0.6 + Math.abs(along)); // bande qui s'évase
-    const lx = along * size;
-    const ly = perp * size;
-    const px = cx + lx * cos - ly * sin;
-    const py = cy + lx * sin + ly * cos;
-    const b = Math.pow(Math.random(), 2.2);
-    const dot = b < 0.92 ? 0.7 : 1.5;
+  for (let n = 0; n < 4200; n++) {
+    const along = (Math.random() - 0.5) * 1.0;
+    const perp = gaussian() * (0.06 + 0.05 * Math.abs(along));
+    const tx = along * ca - perp * sa;
+    const ty = along * sa + perp * ca;
+    const rad = Math.hypot(tx, ty);
+    if (rad > 0.5) continue;
+    const fall = 1 - Math.pow(rad / 0.5, 1.7);
+    const px = cx + tx * size;
+    const py = cy + ty * size;
+    const b = Math.pow(Math.random(), 2.3);
+    const dot = b < 0.94 ? 0.8 : 1.7;
     const tint = Math.random();
     let r = 255;
-    let g = 250;
-    let bl = 245;
+    let g = 248;
+    let bl = 240;
     if (tint < 0.22) {
-      r = 175;
-      g = 200;
+      r = 180;
+      g = 205;
       bl = 255;
-    } else if (tint > 0.84) {
+    } else if (tint > 0.85) {
       r = 255;
-      g = 215;
-      bl = 170;
+      g = 212;
+      bl = 165;
     }
-    ctx.fillStyle = `rgba(${r},${g},${bl},${0.25 + b * 0.7})`;
+    ctx.fillStyle = `rgba(${r},${g},${bl},${(0.3 + b * 0.7) * Math.max(0, fall)})`;
     ctx.fillRect(px, py, dot, dot);
   }
-
-  // Voile d'étoiles éparses sur tout le champ
-  for (let i = 0; i < 1400; i++) {
-    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.35})`;
-    ctx.fillRect(Math.random() * size, Math.random() * size, 0.7, 0.7);
+  // Quelques étoiles éparses hors de la bande
+  for (let n = 0; n < 600; n++) {
+    const px = Math.random() * size;
+    const py = Math.random() * size;
+    const rad = Math.hypot(px / size - 0.5, py / size - 0.5);
+    if (rad > 0.5) continue;
+    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.4 * (1 - rad / 0.5)})`;
+    ctx.fillRect(px, py, 0.8, 0.8);
   }
-
-  // Fondu radial des bords : la texture s'évanouit avant ses limites pour
-  // qu'aucun contour rectangulaire ne soit perceptible dans le ciel.
-  ctx.globalCompositeOperation = "destination-in";
-  const fade = ctx.createRadialGradient(cx, cy, size * 0.18, cx, cy, size * 0.5);
-  fade.addColorStop(0, "rgba(0,0,0,1)");
-  fade.addColorStop(0.8, "rgba(0,0,0,0.85)");
-  fade.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = fade;
-  ctx.fillRect(0, 0, size, size);
 
   ctx.globalCompositeOperation = "source-over";
   return toTexture(canvas, true, false);

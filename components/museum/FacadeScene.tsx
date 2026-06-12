@@ -34,7 +34,7 @@ const ENTAB_Y = PODIUM_HEIGHT + 0.5 + COLUMN_HEIGHT + 0.42;
 const DOOR_AJAR = 0.12;
 const DOOR_OPEN = 1.2;
 /* Durée de l'approche (s) ; doit correspondre au minuteur de Museum3D. */
-const ENTER_DURATION = 2.2;
+const ENTER_DURATION = 2.4;
 
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -80,19 +80,19 @@ function Galaxy() {
   return (
     <group position={[-18, 52, -108]} rotation={[0.15, 0, 0]}>
       <mesh ref={main} renderOrder={-1}>
-        <planeGeometry args={[230, 150]} />
+        <planeGeometry args={[235, 155]} />
         <meshBasicMaterial
           map={texture}
           transparent
-          opacity={0.95}
+          opacity={0.8}
           depthWrite={false}
           fog={false}
           blending={THREE.AdditiveBlending}
         />
       </mesh>
-      {/* Halo du cœur galactique */}
-      <sprite scale={[60, 34, 1]} position={[6, -4, 1]}>
-        <spriteMaterial map={core} transparent opacity={0.4} depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
+      {/* Halo diffus du cœur galactique */}
+      <sprite scale={[54, 30, 1]} position={[6, -3, 1]}>
+        <spriteMaterial map={core} transparent opacity={0.22} depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
       </sprite>
     </group>
   );
@@ -187,164 +187,62 @@ function Column({
   );
 }
 
-/** Palmette de bronze (acrotère) : éventail de feuilles sur une volute. */
-function Palmette({ scale = 1 }: { scale?: number }) {
-  const petals = 9;
-  const bronze = { color: "#9a7a45", metalness: 0.55, roughness: 0.42 };
-  return (
-    <group scale={scale}>
-      {Array.from({ length: petals }).map((_, i) => {
-        const a = -0.8 + (i / (petals - 1)) * 1.6;
-        const len = 0.62 - Math.abs(i - (petals - 1) / 2) * 0.05;
-        return (
-          <group key={i} rotation={[0, 0, -a]}>
-            <mesh position={[0, len / 2, 0]} castShadow>
-              <coneGeometry args={[0.05, len, 6]} />
-              <meshStandardMaterial {...bronze} />
-            </mesh>
-          </group>
-        );
-      })}
-      <mesh position={[0, 0.04, 0.02]}>
-        <sphereGeometry args={[0.14, 12, 8]} />
-        <meshStandardMaterial color="#7a5a2e" metalness={0.6} roughness={0.4} />
-      </mesh>
-    </group>
-  );
-}
-
-/** Rosette / patère de bronze (semis de pétales autour d'un cœur bombé). */
-function Rosette({ r = 0.4 }: { r?: number }) {
-  const petals = 8;
-  return (
-    <group>
-      <mesh>
-        <circleGeometry args={[r, 28]} />
-        <meshStandardMaterial color="#6d4f24" metalness={0.7} roughness={0.42} />
-      </mesh>
-      {Array.from({ length: petals }).map((_, i) => {
-        const a = (i / petals) * Math.PI * 2;
-        return (
-          <mesh key={i} position={[Math.cos(a) * r * 0.58, Math.sin(a) * r * 0.58, 0.03]}>
-            <sphereGeometry args={[r * 0.24, 8, 6]} />
-            <meshStandardMaterial color="#9a7a45" metalness={0.6} roughness={0.4} />
-          </mesh>
-        );
-      })}
-      <mesh position={[0, 0, 0.06]}>
-        <sphereGeometry args={[r * 0.3, 12, 8]} />
-        <meshStandardMaterial color="#b8924f" metalness={0.72} roughness={0.33} />
-      </mesh>
-    </group>
-  );
-}
-
 function Pediment({ marble }: { marble: SurfaceMaps }) {
-  const half = TEMPLE_WIDTH / 2 + 0.6;
   const geometry = useMemo(() => {
     const shape = new THREE.Shape();
-    shape.moveTo(-half, 0);
-    shape.lineTo(half, 0);
+    shape.moveTo(-TEMPLE_WIDTH / 2 - 0.6, 0);
+    shape.lineTo(TEMPLE_WIDTH / 2 + 0.6, 0);
     shape.lineTo(0, PEDIMENT_HEIGHT);
     shape.closePath();
     return new THREE.ExtrudeGeometry(shape, { depth: 2, bevelEnabled: false });
-  }, [half]);
-
-  // Champ assombri du tympan, encadré par les corniches
-  const fieldGeometry = useMemo(() => {
-    const bw = half - 1.1;
-    const top = PEDIMENT_HEIGHT - 0.62;
-    const shape = new THREE.Shape();
-    shape.moveTo(-bw, 0.26);
-    shape.lineTo(bw, 0.26);
-    shape.lineTo(0, top);
-    shape.closePath();
-    return new THREE.ShapeGeometry(shape);
-  }, [half]);
+  }, []);
 
   const y = ENTAB_Y + ENTABLATURE_HEIGHT;
-  const slopeAngle = Math.atan2(PEDIMENT_HEIGHT, half);
-  const slopeLength = Math.hypot(PEDIMENT_HEIGHT, half) + 0.6;
-  const wreathLeaves = 18;
+  const slopeAngle = Math.atan2(PEDIMENT_HEIGHT, TEMPLE_WIDTH / 2 + 0.6);
+  const slopeLength = Math.hypot(PEDIMENT_HEIGHT, TEMPLE_WIDTH / 2 + 0.6) + 0.6;
 
   return (
     <group position={[0, y, -1]}>
       <mesh geometry={geometry} castShadow receiveShadow>
         <meshStandardMaterial {...marble} bumpScale={0.6} />
       </mesh>
-
-      {/* Champ du tympan, légèrement en avant et assombri */}
-      <mesh geometry={fieldGeometry} position={[0, 0, 1.02]}>
-        <meshStandardMaterial color="#b3a98e" roughness={0.86} />
-      </mesh>
-
-      {/* Geison horizontal (corniche de base saillante) */}
-      <mesh position={[0, -0.04, 1.18]} castShadow>
-        <boxGeometry args={[TEMPLE_WIDTH + 1.6, 0.32, 0.46]} />
+      {/* Corniches rampantes */}
+      <mesh
+        position={[-(TEMPLE_WIDTH / 4 + 0.15), PEDIMENT_HEIGHT / 2 + 0.18, 1.06]}
+        rotation={[0, 0, slopeAngle]}
+        castShadow
+      >
+        <boxGeometry args={[slopeLength, 0.34, 2.4]} />
         <meshStandardMaterial {...marble} bumpScale={0.6} />
       </mesh>
-      {/* Corniches rampantes à listel */}
-      {[-1, 1].map((s) => (
-        <group key={s}>
-          <mesh
-            position={[s * (TEMPLE_WIDTH / 4 + 0.15), PEDIMENT_HEIGHT / 2 + 0.18, 1.08]}
-            rotation={[0, 0, s * slopeAngle]}
-            castShadow
-          >
-            <boxGeometry args={[slopeLength, 0.36, 2.5]} />
-            <meshStandardMaterial {...marble} bumpScale={0.6} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* Couronne de laurier centrale, en bronze, avec rubans */}
-      <group position={[0, PEDIMENT_HEIGHT * 0.42, 1.24]}>
+      <mesh
+        position={[TEMPLE_WIDTH / 4 + 0.15, PEDIMENT_HEIGHT / 2 + 0.18, 1.06]}
+        rotation={[0, 0, -slopeAngle]}
+        castShadow
+      >
+        <boxGeometry args={[slopeLength, 0.34, 2.4]} />
+        <meshStandardMaterial {...marble} bumpScale={0.6} />
+      </mesh>
+      {/* Relief du tympan : couronne de laurier en bronze */}
+      <group position={[0, PEDIMENT_HEIGHT * 0.36, 2.04]}>
         <mesh>
-          <torusGeometry args={[0.92, 0.1, 12, 44]} />
+          <torusGeometry args={[0.95, 0.13, 12, 40]} />
           <meshStandardMaterial color="#6d4f24" metalness={0.85} roughness={0.4} />
         </mesh>
-        {Array.from({ length: wreathLeaves }).map((_, i) => {
-          const a = (i / wreathLeaves) * Math.PI * 2;
-          return (
-            <mesh
-              key={i}
-              position={[Math.cos(a) * 0.92, Math.sin(a) * 0.92, 0]}
-              rotation={[Math.PI / 2, 0, -a + Math.PI / 2]}
-            >
-              <coneGeometry args={[0.075, 0.34, 5]} />
-              <meshStandardMaterial color="#7c5a2c" metalness={0.78} roughness={0.42} />
-            </mesh>
-          );
-        })}
-        <mesh position={[0, 0, 0.04]}>
-          <circleGeometry args={[0.34, 24]} />
-          <meshStandardMaterial color="#8a6530" metalness={0.82} roughness={0.36} />
+        <mesh>
+          <circleGeometry args={[0.4, 24]} />
+          <meshStandardMaterial color="#56401f" metalness={0.8} roughness={0.45} />
         </mesh>
-        {/* Rubans */}
-        {[-1, 1].map((s) => (
-          <mesh key={s} position={[s * 0.26, -1.02, 0]} rotation={[0, 0, s * 0.32]} castShadow>
-            <boxGeometry args={[0.11, 0.72, 0.05]} />
-            <meshStandardMaterial color="#7a5a2e" metalness={0.6} roughness={0.45} />
+      </group>
+      {/* Acrotères */}
+      {[[-TEMPLE_WIDTH / 2 - 0.4, 0.34], [0, PEDIMENT_HEIGHT + 0.32], [TEMPLE_WIDTH / 2 + 0.4, 0.34]].map(
+        ([x, ay], i) => (
+          <mesh key={i} position={[x, ay, 1]} castShadow>
+            <sphereGeometry args={[0.34, 14, 10]} />
+            <meshStandardMaterial {...marble} bumpScale={0.6} />
           </mesh>
-        ))}
-      </group>
-
-      {/* Rosettes flanquantes */}
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * (half * 0.46), PEDIMENT_HEIGHT * 0.24, 1.2]}>
-          <Rosette r={0.42} />
-        </group>
-      ))}
-
-      {/* Acrotères : palmettes de bronze (sommet + angles) */}
-      <group position={[0, PEDIMENT_HEIGHT + 0.18, 1]}>
-        <Palmette scale={1.15} />
-      </group>
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * half, 0.06, 1]} rotation={[0, 0, s * 0.18]}>
-          <Palmette scale={0.78} />
-        </group>
-      ))}
+        )
+      )}
     </group>
   );
 }
@@ -401,52 +299,50 @@ function Torch({ x, z }: { x: number; z: number }) {
 }
 
 /**
- * Cyprès : silhouette fuselée bâtie de plusieurs touffes coniques
- * superposées, légèrement décalées et bicolores, sur un tronc apparent.
- * Chaque arbre reçoit une graine déterministe (sa position) pour varier
- * forme et inclinaison sans aléatoire à chaque frame.
+ * Cyprès d'Italie : silhouette élancée en flamme, obtenue par révolution
+ * d'un profil fuselé (LatheGeometry) — une seule surface lisse, dense et
+ * sombre, bien plus crédible qu'un empilement de cônes. Légère variation
+ * de taille/inclinaison par graine déterministe (sa position).
  */
 function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
-  const layers = useMemo(() => {
+  const { geometry, lean, spin } = useMemo(() => {
     let s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
     const rnd = () => {
       s = Math.sin(s + 1) * 43758.5453;
       return s - Math.floor(s);
     };
-    const baseR = height * 0.13;
-    const tufts = 8;
-    const arr: Array<{ y: number; r: number; h: number; dx: number; dz: number; dark: boolean }> = [];
-    for (let i = 0; i < tufts; i++) {
-      const t = i / (tufts - 1);
-      arr.push({
-        y: height * (0.16 + t * 0.78),
-        r: baseR * (1 - t * 0.82) * (0.82 + rnd() * 0.34),
-        h: height * 0.24 * (1 - t * 0.35),
-        dx: (rnd() - 0.5) * baseR * 0.5,
-        dz: (rnd() - 0.5) * baseR * 0.5,
-        dark: rnd() > 0.5,
-      });
-    }
-    return { arr, lean: (rnd() - 0.5) * 0.07, spin: rnd() * Math.PI };
+    const maxR = height * 0.15 * (0.9 + rnd() * 0.2);
+    // Profil (rayon, hauteur normalisée) : renflé au tiers bas, pointe fine
+    const profile: Array<[number, number]> = [
+      [0.015, 0],
+      [0.5, 0.05],
+      [0.82, 0.14],
+      [1.0, 0.3],
+      [0.95, 0.46],
+      [0.78, 0.62],
+      [0.55, 0.76],
+      [0.32, 0.87],
+      [0.14, 0.95],
+      [0.0, 1.0],
+    ];
+    const points = profile.map(([r, h]) => new THREE.Vector2(r * maxR, h * height));
+    return {
+      geometry: new THREE.LatheGeometry(points, 14),
+      lean: (rnd() - 0.5) * 0.05,
+      spin: rnd() * Math.PI,
+    };
   }, [x, z, height]);
 
   return (
-    <group position={[x, 0, z]} rotation={[0, layers.spin, layers.lean]}>
-      {/* Tronc */}
-      <mesh position={[0, height * 0.1, 0]} castShadow>
-        <cylinderGeometry args={[height * 0.016, height * 0.032, height * 0.22, 6]} />
+    <group position={[x, 0, z]} rotation={[0, spin, lean]}>
+      {/* Tronc apparent à la base */}
+      <mesh position={[0, height * 0.04, 0]} castShadow>
+        <cylinderGeometry args={[height * 0.012, height * 0.022, height * 0.1, 6]} />
         <meshStandardMaterial color="#3a2b1c" roughness={0.92} />
       </mesh>
-      {layers.arr.map((l, i) => (
-        <mesh key={i} position={[l.dx, l.y, l.dz]} castShadow>
-          <coneGeometry args={[l.r, l.h, 7]} />
-          <meshStandardMaterial color={l.dark ? "#0e2113" : "#17311d"} roughness={0.95} />
-        </mesh>
-      ))}
-      {/* Pointe effilée */}
-      <mesh position={[0, height * 0.99, 0]} castShadow>
-        <coneGeometry args={[height * 0.022, height * 0.13, 6]} />
-        <meshStandardMaterial color="#17311d" roughness={0.95} />
+      {/* Feuillage */}
+      <mesh geometry={geometry} castShadow>
+        <meshStandardMaterial color="#13301c" roughness={0.95} metalness={0} />
       </mesh>
     </group>
   );
@@ -507,10 +403,9 @@ function DoorLeaf({ side, bronze }: { side: 1 | -1; bronze: SurfaceMaps }) {
 
 /**
  * Façade monumentale du temple, de nuit : huit colonnes cannelées sur
- * podium à grand escalier, entablement denticulé, fronton à acrotères et
- * palmettes, grandes portes de bronze ouvragées, torches, voie lactée,
- * cyprès et vestiges épars. Ombres portées réelles par la lumière
- * sidérale.
+ * podium à grand escalier, entablement denticulé, fronton à acrotères,
+ * grandes portes de bronze ouvragées, torches, voie lactée, cyprès et
+ * vestiges épars. Ombres portées réelles par la lumière sidérale.
  */
 export default function FacadeScene({
   entering,
@@ -563,14 +458,16 @@ export default function FacadeScene({
       );
       const e = easeInOutCubic(t);
 
-      // Glissé fluide jusqu'au seuil, à hauteur d'œil, puis à travers la porte.
-      const eyeY = PODIUM_HEIGHT + 1.7;
-      const targetZ = -PORCH_DEPTH - 0.2;
+      // Glissé fluide depuis la position de départ jusqu'au seuil même des
+      // portes, à hauteur d'œil — sans franchir la cella (évite tout
+      // passage à travers les murs).
+      const eyeY = PODIUM_HEIGHT + 1.9;
+      const targetZ = -PORCH_DEPTH + 0.26;
       camera.position.x = THREE.MathUtils.lerp(camStart.current.x, 0, e);
       camera.position.y = THREE.MathUtils.lerp(camStart.current.y, eyeY, e);
       camera.position.z = THREE.MathUtils.lerp(camStart.current.z, targetZ, e);
-      // Le regard descend en douceur du fronton vers le cœur lumineux du temple.
-      camera.lookAt(0, THREE.MathUtils.lerp(10.4, eyeY, e), THREE.MathUtils.lerp(0, -14, e));
+      // Le regard descend en douceur du fronton vers la baie lumineuse.
+      camera.lookAt(0, THREE.MathUtils.lerp(10.4, PODIUM_HEIGHT + 2.8, e), THREE.MathUtils.lerp(0, -14, e));
 
       // Les battants s'ouvrent en grand, un peu en avance sur la marche.
       const open = THREE.MathUtils.lerp(
