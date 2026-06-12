@@ -9,7 +9,7 @@ function Veil() {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-night">
       <p className="animate-pulse font-display text-2xl font-bold tracking-widecaps text-gold/80">
-        MVSEVM
+        HERKVL
       </p>
     </div>
   );

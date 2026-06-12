@@ -170,33 +170,43 @@ export function bronzeSurface(size = 512): SurfaceMaps {
   );
 }
 
-/** Esplanade de pierre usée devant le temple. */
-export function esplanadeSurface(size = 1024): SurfaceMaps {
-  const stone = hexToRgb("#7d745f");
-  const dark = hexToRgb("#4f483a");
-  const grout = hexToRgb("#221d15");
+/**
+ * Terre sableuse tassée des abords d'un temple romain : nappes ocre
+ * irrégulières, ondulations balayées par le vent, grain serré et
+ * cailloux épars à demi enfouis.
+ */
+export function sandSurface(size = 1024): SurfaceMaps {
+  const sand = hexToRgb("#a8906a");
+  const lightSand = hexToRgb("#c6ad83");
+  const damp = hexToRgb("#73603f");
+  const pebbleTone = hexToRgb("#90867a");
 
   return toSurface(
     bakeSurface(size, (u, v) => {
-      const tiles = 6;
-      const tu = u * tiles;
-      const tv = v * tiles;
-      const fu = tu - Math.floor(tu);
-      const fv = tv - Math.floor(tv);
-      const edge = Math.min(fu, 1 - fu, fv, 1 - fv);
-      const joint = edge < 0.02 ? 1 : edge < 0.05 ? ((0.05 - edge) / 0.03) * 0.5 : 0;
+      // Grandes nappes : zones tassées sombres / zones sèches claires
+      const patches = fbm(u * 3.1, v * 3.1, 4);
+      // Ondulations fines de sable balayé, déformées par le bruit
+      const ripple =
+        Math.sin((v * 24 + fbm(u * 6, v * 6, 3) * 7) * Math.PI * 2) * 0.5 + 0.5;
+      // Grain serré + micro-relief
+      const grain = fbm(u * 60 + 11.7, v * 60 + 41.2, 3);
+      const micro = fbm(u * 140 + 3.1, v * 140 + 9.4, 2);
+      // Cailloux épars : seuil sur une turbulence haute fréquence
+      const t = turbulence(u * 48 + 17.3, v * 48 + 5.1, 3);
+      const pebble = t < 0.085 ? (0.085 - t) / 0.085 : 0;
 
-      const weather = fbm(tu * 1.7, tv * 1.7, 4);
-      const grain = fbm(tu * 9 + 17, tv * 9 + 5, 3);
-
-      let color = mix(stone, dark, (weather - 0.4) * 1.3);
-      color = mix(color, hexToRgb("#8d8064"), (grain - 0.5) * 0.4);
-      color = mix(color, grout, joint);
+      let color = mix(sand, damp, Math.max(0, patches - 0.45) * 1.5);
+      color = mix(
+        color,
+        lightSand,
+        Math.max(0, 0.5 - patches) * ripple * 0.7 + (grain - 0.5) * 0.4
+      );
+      color = mix(color, pebbleTone, pebble * 0.85);
 
       return {
         color,
-        bump: 0.55 - joint * 0.4 + (grain - 0.5) * 0.2,
-        rough: 0.85 + (grain - 0.5) * 0.1,
+        bump: 0.5 + (grain - 0.5) * 0.28 + (micro - 0.5) * 0.18 + ripple * 0.07 + pebble * 0.5,
+        rough: 0.94 - pebble * 0.25 + (grain - 0.5) * 0.06,
       };
     })
   );
@@ -379,7 +389,8 @@ export function starPositions(count: number, radius: number): Float32Array {
   return positions;
 }
 
-function gaussian(): number {
+/** Tirage gaussien (Box-Muller) — dispersion naturelle des particules. */
+export function gaussian(): number {
   let u = 0;
   let v = 0;
   while (u === 0) u = Math.random();
@@ -388,111 +399,54 @@ function gaussian(): number {
 }
 
 /**
- * Voie lactée procédurale réaliste : la nébulosité de la bande est tirée
- * d'un bruit fractal continu (et non d'un semis de points), traversée
- * d'une bande de poussière sombre, avec un cœur galactique chaud et des
- * bras bleutés teintés de rose. Des étoiles ponctuelles sont semées
- * par-dessus, plus denses sur la bande. Rendu une seule fois sur un canvas
- * (fond transparent) → une unique surface dans la scène.
+ * Particule douce : disque blanc à bord fondu, pour des points ronds et
+ * lumineux (étoiles de la galaxie, poussières en suspension) au lieu des
+ * carrés bruts du PointsMaterial nu.
  */
-export function galaxyTexture(size = 640): THREE.CanvasTexture {
+export function softParticleTexture(size = 64): THREE.CanvasTexture {
   const [canvas, ctx] = makeCanvas(size);
-  const angle = -0.42;
-  const ca = Math.cos(angle);
-  const sa = Math.sin(angle);
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.35, "rgba(255,255,255,0.7)");
+  gradient.addColorStop(0.7, "rgba(255,255,255,0.18)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  return toTexture(canvas, false, false);
+}
 
-  const blue: RGB = { r: 120, g: 150, b: 220 };
-  const warm: RGB = { r: 255, g: 218, b: 165 };
-  const pink: RGB = { r: 210, g: 140, b: 185 };
-
-  // Nébulosité continue par bruit fractal
-  const img = ctx.createImageData(size, size);
+/**
+ * Langue de flamme (alpha) : cœur blanc-jaune, corps orange, lisière
+ * rouge sombre, base fondue — ondulée par un léger bruit pour casser
+ * la symétrie. Posée sur des plans croisés et animée par flicker.
+ */
+export function flameTexture(size = 128): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(size, size * 2);
+  const img = ctx.createImageData(size, size * 2);
   const data = img.data;
-  for (let py = 0; py < size; py++) {
+
+  for (let py = 0; py < size * 2; py++) {
     for (let px = 0; px < size; px++) {
       const u = px / size - 0.5;
-      const v = py / size - 0.5;
-      const along = u * ca + v * sa;
-      const perp = -u * sa + v * ca;
-
-      const clump = fbm(along * 3 + 11.3, perp * 7 + 4.1, 5);
-      const sigma = 0.08 + 0.08 * Math.abs(along);
-      let band = Math.exp(-(perp * perp) / (2 * sigma * sigma)) * (0.32 + clump * 1.15);
-
-      // Bande de poussière sombre, légèrement décalée et sinueuse
-      const dust =
-        Math.exp(-Math.pow((perp - 0.012) / 0.03, 2)) *
-        (0.5 + 0.6 * fbm(along * 4 + 2.7, perp * 9 + 1.3, 4));
-      band *= 1 - 0.85 * Math.min(1, dust);
-
-      // Cœur galactique
-      const core =
-        Math.exp(-(along * along) / (2 * 0.05 * 0.05)) *
-        Math.exp(-(perp * perp) / (2 * 0.05 * 0.05));
-
-      let intensity = band * 0.8 + core * 1.5;
-
-      // Fondu radial : disparition bien avant les bords du plan
-      const rad = Math.hypot(u, v);
-      intensity *= Math.max(0, 1 - Math.pow(rad / 0.5, 1.7));
-      intensity = Math.max(0, Math.min(1, intensity));
-
-      const warmth = Math.min(1, core * 1.6 + Math.max(0, 0.32 - Math.abs(along)) * 1.6);
-      const neb = Math.max(0, fbm(along * 5 + 30.2, perp * 5 + 12.7, 4) - 0.52) * 1.6;
-      let col = mix(blue, warm, warmth);
-      col = mix(col, pink, Math.min(0.5, neb));
+      const h = 1 - py / (size * 2); // 0 = base, 1 = pointe
+      // Largeur : ventrue au tiers bas, effilée vers la pointe
+      const width =
+        0.34 *
+        Math.pow(Math.sin(Math.PI * Math.min(1, h * 0.92 + 0.04)), 0.85) *
+        (1 - h * 0.55);
+      const waver = (fbm(u * 3 + 7.7, h * 5.2 + 1.3, 3) - 0.5) * 0.12 * h;
+      const d = Math.abs(u - waver) / Math.max(width, 0.001);
+      let a = Math.max(0, 1 - d);
+      a = Math.pow(a, 1.6) * Math.pow(Math.min(1, h * 6), 1.2);
+      const core = Math.pow(a, 3) * (1 - h * 0.35);
 
       const i = (py * size + px) * 4;
-      data[i] = col.r;
-      data[i + 1] = col.g;
-      data[i + 2] = col.b;
-      data[i + 3] = Math.round(intensity * 255);
+      data[i] = 255;
+      data[i + 1] = Math.min(255, Math.round(110 + core * 135 + a * 35));
+      data[i + 2] = Math.min(255, Math.round(24 + core * 215));
+      data[i + 3] = Math.round(Math.min(1, a * 1.25) * 255);
     }
   }
   ctx.putImageData(img, 0, 0);
-
-  // Étoiles ponctuelles, concentrées sur la bande (additif)
-  ctx.globalCompositeOperation = "lighter";
-  const cx = size / 2;
-  const cy = size / 2;
-  for (let n = 0; n < 4200; n++) {
-    const along = (Math.random() - 0.5) * 1.0;
-    const perp = gaussian() * (0.06 + 0.05 * Math.abs(along));
-    const tx = along * ca - perp * sa;
-    const ty = along * sa + perp * ca;
-    const rad = Math.hypot(tx, ty);
-    if (rad > 0.5) continue;
-    const fall = 1 - Math.pow(rad / 0.5, 1.7);
-    const px = cx + tx * size;
-    const py = cy + ty * size;
-    const b = Math.pow(Math.random(), 2.3);
-    const dot = b < 0.94 ? 0.8 : 1.7;
-    const tint = Math.random();
-    let r = 255;
-    let g = 248;
-    let bl = 240;
-    if (tint < 0.22) {
-      r = 180;
-      g = 205;
-      bl = 255;
-    } else if (tint > 0.85) {
-      r = 255;
-      g = 212;
-      bl = 165;
-    }
-    ctx.fillStyle = `rgba(${r},${g},${bl},${(0.3 + b * 0.7) * Math.max(0, fall)})`;
-    ctx.fillRect(px, py, dot, dot);
-  }
-  // Quelques étoiles éparses hors de la bande
-  for (let n = 0; n < 600; n++) {
-    const px = Math.random() * size;
-    const py = Math.random() * size;
-    const rad = Math.hypot(px / size - 0.5, py / size - 0.5);
-    if (rad > 0.5) continue;
-    ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.4 * (1 - rad / 0.5)})`;
-    ctx.fillRect(px, py, 0.8, 0.8);
-  }
-
-  ctx.globalCompositeOperation = "source-over";
   return toTexture(canvas, true, false);
 }

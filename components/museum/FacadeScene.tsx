@@ -4,15 +4,18 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html, Instances, Instance, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
+import Galaxy from "./Galaxy";
+import { fbm } from "./noise";
 import {
   marbleSurface,
   travertineSurface,
   bronzeSurface,
-  esplanadeSurface,
+  sandSurface,
   fluteTexture,
+  flameTexture,
+  softParticleTexture,
   starPositions,
   skyGradientTexture,
-  galaxyTexture,
   shadowBlobTexture,
   setRepeat,
   type SurfaceMaps,
@@ -63,41 +66,6 @@ function SkyDome() {
   );
 }
 
-/**
- * Voie lactée : large bande de poussière d'étoiles et de nébuleuses
- * tendue en travers du ciel, en très lente rotation pour la donner
- * vivante. Une seule surface texturée additive — coût négligeable.
- */
-function Galaxy() {
-  const texture = useMemo(() => galaxyTexture(), []);
-  const main = useRef<THREE.Mesh>(null);
-  const core = useMemo(() => new THREE.CanvasTexture(glowCanvas("rgba(255, 244, 222, 0.9)")), []);
-
-  useFrame(({ clock }) => {
-    if (main.current) main.current.rotation.z = -0.3 + Math.sin(clock.elapsedTime * 0.01) * 0.015;
-  });
-
-  return (
-    <group position={[-18, 52, -108]} rotation={[0.15, 0, 0]}>
-      <mesh ref={main} renderOrder={-1}>
-        <planeGeometry args={[235, 155]} />
-        <meshBasicMaterial
-          map={texture}
-          transparent
-          opacity={0.8}
-          depthWrite={false}
-          fog={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-      {/* Halo diffus du cœur galactique */}
-      <sprite scale={[54, 30, 1]} position={[6, -3, 1]}>
-        <spriteMaterial map={core} transparent opacity={0.22} depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
-      </sprite>
-    </group>
-  );
-}
-
 /** Ombre de contact douce posée au sol sous un objet. */
 function Blob({
   x,
@@ -126,19 +94,38 @@ function Blob({
 function Stars() {
   const near = useMemo(() => starPositions(1100, 96), []);
   const far = useMemo(() => starPositions(1700, 122), []);
+  const sprite = useMemo(() => softParticleTexture(), []);
   return (
     <group>
       <points>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[near, 3]} />
         </bufferGeometry>
-        <pointsMaterial size={0.32} color="#f4eede" transparent opacity={0.9} sizeAttenuation depthWrite={false} />
+        <pointsMaterial
+          size={0.42}
+          map={sprite}
+          color="#f4eede"
+          transparent
+          opacity={0.9}
+          sizeAttenuation
+          depthWrite={false}
+          fog={false}
+        />
       </points>
       <points>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[far, 3]} />
         </bufferGeometry>
-        <pointsMaterial size={0.16} color="#aab8d6" transparent opacity={0.6} sizeAttenuation depthWrite={false} />
+        <pointsMaterial
+          size={0.24}
+          map={sprite}
+          color="#aab8d6"
+          transparent
+          opacity={0.6}
+          sizeAttenuation
+          depthWrite={false}
+          fog={false}
+        />
       </points>
     </group>
   );
@@ -264,45 +251,157 @@ function Dentils({ width, y, z }: { width: number; y: number; z: number }) {
   );
 }
 
-function Torch({ x, z }: { x: number; z: number }) {
+/**
+ * Torchère de bronze posée au sol : socle de pierre, fût bagué, vasque
+ * tournée, braises incandescentes et flammes sur plans croisés animés
+ * par flicker — halo additif et lumière vacillante.
+ */
+function Torch({
+  x,
+  z,
+  scale = 1,
+  flame,
+  stone,
+}: {
+  x: number;
+  z: number;
+  scale?: number;
+  flame: THREE.Texture;
+  stone: SurfaceMaps;
+}) {
   const light = useRef<THREE.PointLight>(null);
-  const flame = useRef<THREE.Mesh>(null);
+  const flameA = useRef<THREE.Mesh>(null);
+  const flameB = useRef<THREE.Mesh>(null);
+  const ember = useRef<THREE.MeshStandardMaterial>(null);
+  const haloMat = useRef<THREE.SpriteMaterial>(null);
   const halo = useMemo(() => new THREE.CanvasTexture(glowCanvas("rgba(255, 166, 64, 0.85)")), []);
+
+  // Vasque évasée (profil tourné)
+  const bowl = useMemo(() => {
+    const profile: Array<[number, number]> = [
+      [0.06, 0],
+      [0.11, 0.02],
+      [0.13, 0.1],
+      [0.21, 0.17],
+      [0.34, 0.26],
+      [0.43, 0.36],
+      [0.45, 0.44],
+      [0.4, 0.46],
+      [0.33, 0.39],
+      [0.29, 0.36],
+    ];
+    return new THREE.LatheGeometry(
+      profile.map(([r, h]) => new THREE.Vector2(r, h)),
+      20
+    );
+  }, []);
+
+  // Plans de flamme ancrés à leur base (l'échelle grandit vers le haut)
+  const flamePlane = useMemo(() => {
+    const g = new THREE.PlaneGeometry(0.66, 1.22);
+    g.translate(0, 0.61, 0);
+    return g;
+  }, []);
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    const flicker = 0.8 + Math.sin(t * 9 + x) * 0.12 + Math.sin(t * 23 + x * 2) * 0.08;
-    if (light.current) light.current.intensity = 22 * flicker;
-    if (flame.current) flame.current.scale.set(0.9 + flicker * 0.15, 0.85 + flicker * 0.3, 0.9 + flicker * 0.15);
+    const f =
+      0.82 +
+      Math.sin(t * 9 + x) * 0.1 +
+      Math.sin(t * 23 + x * 2.3) * 0.06 +
+      Math.sin(t * 4.7 + x) * 0.05;
+    if (light.current) light.current.intensity = 30 * f * scale;
+    if (flameA.current) {
+      flameA.current.scale.set(0.94 + (1 - f) * 0.25, 0.74 + f * 0.45, 1);
+      flameA.current.rotation.z = Math.sin(t * 6.3 + x) * 0.05;
+    }
+    if (flameB.current) {
+      flameB.current.scale.set(0.86 + f * 0.18, 0.68 + f * 0.5, 1);
+      flameB.current.rotation.z = Math.sin(t * 7.1 + x + 2) * 0.06;
+    }
+    if (ember.current) ember.current.emissiveIntensity = 1.6 + f * 1.6;
+    if (haloMat.current) haloMat.current.opacity = 0.3 + f * 0.2;
   });
 
   return (
-    <group position={[x, PODIUM_HEIGHT + 2.8, z]}>
-      <mesh position={[0, -0.2, 0]} castShadow>
-        <cylinderGeometry args={[0.26, 0.12, 0.34, 16]} />
-        <meshStandardMaterial color="#3d2f1d" metalness={0.75} roughness={0.4} />
+    <group position={[x, 0, z]} scale={scale}>
+      {/* Socle de pierre octogonal */}
+      <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.46, 0.58, 0.36, 8]} />
+        <meshStandardMaterial {...stone} bumpScale={0.7} />
       </mesh>
-      <mesh position={[0, -1.6, 0]} castShadow>
-        <cylinderGeometry args={[0.06, 0.1, 2.6, 10]} />
-        <meshStandardMaterial color="#3d2f1d" metalness={0.75} roughness={0.4} />
+      {/* Fût de bronze légèrement tronconique */}
+      <mesh position={[0, 1.5, 0]} castShadow>
+        <cylinderGeometry args={[0.055, 0.095, 2.3, 12]} />
+        <meshStandardMaterial color="#4a3a22" metalness={0.82} roughness={0.42} />
       </mesh>
-      <mesh ref={flame} position={[0, 0.16, 0]}>
-        <coneGeometry args={[0.18, 0.6, 10]} />
-        <meshBasicMaterial color="#ffb347" transparent opacity={0.92} toneMapped={false} />
+      {/* Bagues décoratives */}
+      {[0.7, 1.55, 2.4].map((h) => (
+        <mesh key={h} position={[0, h, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.095, 0.022, 8, 18]} />
+          <meshStandardMaterial color="#8a6530" metalness={0.88} roughness={0.32} />
+        </mesh>
+      ))}
+      {/* Vasque */}
+      <mesh geometry={bowl} position={[0, 2.62, 0]} castShadow>
+        <meshStandardMaterial color="#54421f" metalness={0.8} roughness={0.4} />
       </mesh>
-      <sprite scale={[1.6, 1.6, 1]} position={[0, 0.2, 0]}>
-        <spriteMaterial map={halo} transparent opacity={0.5} depthWrite={false} blending={THREE.AdditiveBlending} />
+      {/* Braises incandescentes */}
+      <mesh position={[0, 3.04, 0]} scale={[1, 0.35, 1]}>
+        <sphereGeometry args={[0.3, 14, 10]} />
+        <meshStandardMaterial
+          ref={ember}
+          color="#2b1206"
+          emissive="#ff5a1a"
+          emissiveIntensity={2.2}
+          roughness={0.9}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* Flammes : deux plans croisés, texture en langue de feu */}
+      <mesh ref={flameA} geometry={flamePlane} position={[0, 3.05, 0]}>
+        <meshBasicMaterial
+          map={flame}
+          transparent
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh ref={flameB} geometry={flamePlane} position={[0, 3.05, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <meshBasicMaterial
+          map={flame}
+          transparent
+          opacity={0.85}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+      {/* Halo */}
+      <sprite scale={[2.1, 2.1, 1]} position={[0, 3.3, 0]}>
+        <spriteMaterial
+          ref={haloMat}
+          map={halo}
+          transparent
+          opacity={0.4}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
       </sprite>
-      <pointLight ref={light} color="#ff9d45" intensity={22} distance={18} decay={2} />
+      <pointLight ref={light} position={[0, 3.3, 0]} color="#ff9d45" intensity={30} distance={20} decay={2} />
     </group>
   );
 }
 
 /**
- * Cyprès d'Italie : silhouette élancée en flamme, obtenue par révolution
- * d'un profil fuselé (LatheGeometry) — une seule surface lisse, dense et
- * sombre, bien plus crédible qu'un empilement de cônes. Légère variation
- * de taille/inclinaison par graine déterministe (sa position).
+ * Cyprès d'Italie : profil fuselé en révolution dont la surface est
+ * ébouriffée par un bruit fractal (silhouette irrégulière, masses de
+ * feuillage) et teintée par sommet — vert profond dans les creux,
+ * reflets glauques sur les masses exposées. Graine déterministe issue
+ * de la position : chaque arbre est unique mais stable.
  */
 function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
   const { geometry, lean, spin } = useMemo(() => {
@@ -311,24 +410,55 @@ function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
       s = Math.sin(s + 1) * 43758.5453;
       return s - Math.floor(s);
     };
-    const maxR = height * 0.15 * (0.9 + rnd() * 0.2);
-    // Profil (rayon, hauteur normalisée) : renflé au tiers bas, pointe fine
+    const seed = rnd() * 40;
+    const maxR = height * 0.155 * (0.85 + rnd() * 0.3);
     const profile: Array<[number, number]> = [
-      [0.015, 0],
-      [0.5, 0.05],
-      [0.82, 0.14],
+      [0.05, 0],
+      [0.55, 0.04],
+      [0.85, 0.13],
       [1.0, 0.3],
-      [0.95, 0.46],
-      [0.78, 0.62],
-      [0.55, 0.76],
-      [0.32, 0.87],
-      [0.14, 0.95],
-      [0.0, 1.0],
+      [0.94, 0.45],
+      [0.8, 0.6],
+      [0.58, 0.74],
+      [0.36, 0.85],
+      [0.18, 0.93],
+      [0.06, 0.985],
+      [0.012, 1.0],
     ];
-    const points = profile.map(([r, h]) => new THREE.Vector2(r * maxR, h * height));
+    const points = profile.map(
+      ([r, h]) => new THREE.Vector2(Math.max(r * maxR, 0.012), h * height)
+    );
+    const geo = new THREE.LatheGeometry(points, 22);
+
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const dark = new THREE.Color("#11240f");
+    const light = new THREE.Color("#33522a");
+    const tint = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i);
+      const vy = pos.getY(i);
+      const vz = pos.getZ(i);
+      const a = Math.atan2(vz, vx);
+      const hn = vy / height;
+      // Déplacement radial : masses de feuillage irrégulières
+      const n = fbm(Math.cos(a) * 1.8 + seed, Math.sin(a) * 1.8 + hn * 7, 3);
+      const k = 0.74 + n * 0.56;
+      pos.setX(i, vx * k);
+      pos.setZ(i, vz * k);
+      // Teinte : creux sombres, masses exposées plus claires
+      const n2 = fbm(Math.cos(a) * 3 + seed + 5, hn * 11 + Math.sin(a) * 3, 3);
+      tint.copy(dark).lerp(light, Math.max(0, n2 * 1.3 - 0.2) * (0.35 + hn * 0.65));
+      colors[i * 3] = tint.r;
+      colors[i * 3 + 1] = tint.g;
+      colors[i * 3 + 2] = tint.b;
+    }
+    geo.computeVertexNormals();
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
     return {
-      geometry: new THREE.LatheGeometry(points, 14),
-      lean: (rnd() - 0.5) * 0.05,
+      geometry: geo,
+      lean: (rnd() - 0.5) * 0.06,
       spin: rnd() * Math.PI,
     };
   }, [x, z, height]);
@@ -337,14 +467,195 @@ function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
     <group position={[x, 0, z]} rotation={[0, spin, lean]}>
       {/* Tronc apparent à la base */}
       <mesh position={[0, height * 0.04, 0]} castShadow>
-        <cylinderGeometry args={[height * 0.012, height * 0.022, height * 0.1, 6]} />
+        <cylinderGeometry args={[height * 0.012, height * 0.024, height * 0.1, 7]} />
         <meshStandardMaterial color="#3a2b1c" roughness={0.92} />
       </mesh>
       {/* Feuillage */}
       <mesh geometry={geometry} castShadow>
-        <meshStandardMaterial color="#13301c" roughness={0.95} metalness={0} />
+        <meshStandardMaterial vertexColors roughness={0.95} metalness={0} />
       </mesh>
     </group>
+  );
+}
+
+/* Bosquets de cyprès : abords immédiats, arrière du temple, lointains. */
+const CYPRESSES: Array<[number, number, number]> = [
+  // Flancs proches
+  [-20, -4, 11],
+  [-24, 4, 8.5],
+  [-27.5, -10, 12.5],
+  [-31, 0.5, 9.5],
+  [-22.5, -16, 10],
+  [21, -2, 12],
+  [25, 6, 9],
+  [28.5, -9, 13],
+  [33, 1, 10],
+  [24, -17, 10.5],
+  // Derrière le temple
+  [-14, -27, 12],
+  [-7, -31, 9.5],
+  [3, -29, 11],
+  [11, -32, 10],
+  [17, -26, 12.5],
+  [-19, -34, 11],
+  // Lointains
+  [-38, -15, 13],
+  [40, -13, 12.5],
+  [-36, 9, 8],
+  [37, 12, 8.5],
+];
+
+/** Pierres et éclats à demi enfouis dans le sable (graine déterministe). */
+function ScatterStones() {
+  const items = useMemo(() => {
+    let s = 4.7;
+    const rnd = () => {
+      s = Math.sin(s * 91.17 + 13.7) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    const list: Array<{
+      position: [number, number, number];
+      scale: number;
+      rotation: [number, number, number];
+    }> = [];
+    let guard = 0;
+    while (list.length < 46 && guard++ < 400) {
+      const x = (rnd() - 0.5) * 95;
+      const z = (rnd() - 0.5) * 86 + 8;
+      // Allée centrale et emprise du temple dégagées
+      if (Math.abs(x) < 6 && z > -8) continue;
+      if (Math.abs(x) < TEMPLE_WIDTH / 2 + 3 && z < 7 && z > -16) continue;
+      const scale = 0.1 + rnd() * 0.32;
+      list.push({
+        position: [x, scale * 0.32, z],
+        scale,
+        rotation: [rnd() * Math.PI, rnd() * Math.PI, rnd() * Math.PI],
+      });
+    }
+    return list;
+  }, []);
+
+  return (
+    <Instances limit={items.length} castShadow receiveShadow>
+      <dodecahedronGeometry args={[1, 0]} />
+      <meshStandardMaterial color="#8f8576" roughness={0.95} />
+      {items.map((item, i) => (
+        <Instance
+          key={i}
+          position={item.position}
+          scale={item.scale}
+          rotation={item.rotation}
+        />
+      ))}
+    </Instances>
+  );
+}
+
+/** Vestiges épars : tambours, chapiteau brisé, fragment d'architrave. */
+function Ruins({
+  marble,
+  marbleWall,
+  blob,
+}: {
+  marble: SurfaceMaps;
+  marbleWall: SurfaceMaps;
+  blob: THREE.Texture;
+}) {
+  return (
+    <group>
+      {/* Tambour effondré, à demi enfoui */}
+      <mesh position={[12.5, 0.42, 12]} rotation={[0, 0.6, Math.PI / 2]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.55, 0.55, 1.9, 22]} />
+        <meshStandardMaterial {...marble} bumpScale={0.7} />
+      </mesh>
+      {/* Bloc de travertin renversé */}
+      <mesh position={[-11.5, 0.26, 13.5]} rotation={[0.1, 0.9, 0.06]} castShadow receiveShadow>
+        <boxGeometry args={[1.5, 0.7, 1.1]} />
+        <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+      </mesh>
+
+      {/* Pile de tambours d'une colonne disparue, le dernier basculé */}
+      <group position={[17.5, 0, 2]}>
+        <mesh position={[0, 0.4, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.6, 0.63, 0.85, 22]} />
+          <meshStandardMaterial {...marble} bumpScale={0.7} />
+        </mesh>
+        <mesh position={[0.07, 1.2, -0.04]} rotation={[0.07, 0.5, 0.05]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.58, 0.6, 0.78, 22]} />
+          <meshStandardMaterial {...marble} bumpScale={0.7} />
+        </mesh>
+        <mesh position={[1.7, 0.46, 1.5]} rotation={[Math.PI / 2 - 0.1, 0, 0.8]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.56, 0.56, 0.8, 22]} />
+          <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+        </mesh>
+      </group>
+
+      {/* Chapiteau ionique brisé, couché dans le sable */}
+      <group position={[-16, 0.32, 8]} rotation={[0.4, 0.7, 0.18]}>
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[1.3, 0.26, 1.3]} />
+          <meshStandardMaterial {...marble} bumpScale={0.7} />
+        </mesh>
+        <mesh position={[0, -0.3, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.45, 0.58, 0.36, 20]} />
+          <meshStandardMaterial {...marble} bumpScale={0.7} />
+        </mesh>
+        {[-0.55, 0.55].map((vx) => (
+          <mesh key={vx} position={[vx, -0.12, 0.62]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <torusGeometry args={[0.17, 0.07, 9, 18]} />
+            <meshStandardMaterial {...marble} bumpScale={0.7} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Fragment d'architrave à fasces, fiché de biais */}
+      <group position={[-9.5, 0.34, 18.5]} rotation={[0.06, -0.55, 0.12]}>
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[2.6, 0.62, 0.8]} />
+          <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+        </mesh>
+        <mesh position={[0, 0.18, 0.42]} castShadow>
+          <boxGeometry args={[2.6, 0.18, 0.05]} />
+          <meshStandardMaterial {...marble} bumpScale={0.6} />
+        </mesh>
+        <mesh position={[0, -0.08, 0.42]} castShadow>
+          <boxGeometry args={[2.6, 0.14, 0.04]} />
+          <meshStandardMaterial {...marble} bumpScale={0.6} />
+        </mesh>
+      </group>
+
+      {/* Ombres de contact des vestiges */}
+      <Blob x={12.5} z={12} radius={2} opacity={0.45} texture={blob} />
+      <Blob x={-11.5} z={13.5} radius={1.5} opacity={0.45} texture={blob} />
+      <Blob x={17.5} z={2} radius={1.6} opacity={0.45} texture={blob} />
+      <Blob x={19.2} z={3.5} radius={1.2} opacity={0.4} texture={blob} />
+      <Blob x={-16} z={8} radius={1.6} opacity={0.45} texture={blob} />
+      <Blob x={-9.5} z={18.5} radius={2} opacity={0.45} texture={blob} />
+    </group>
+  );
+}
+
+/** Éclairage rasant montant du sol le long de la colonnade. */
+function Uplight({ x }: { x: number }) {
+  const target = useMemo(() => {
+    const o = new THREE.Object3D();
+    o.position.set(x * 0.92, ENTAB_Y - 1.4, -0.4);
+    return o;
+  }, [x]);
+  return (
+    <>
+      <spotLight
+        position={[x, 0.3, 4.8]}
+        target={target}
+        color="#e0b372"
+        intensity={300}
+        angle={0.36}
+        penumbra={0.85}
+        distance={36}
+        decay={2}
+      />
+      <primitive object={target} />
+    </>
   );
 }
 
@@ -404,8 +715,8 @@ function DoorLeaf({ side, bronze }: { side: 1 | -1; bronze: SurfaceMaps }) {
 /**
  * Façade monumentale du temple, de nuit : huit colonnes cannelées sur
  * podium à grand escalier, entablement denticulé, fronton à acrotères,
- * grandes portes de bronze ouvragées, torches, voie lactée, cyprès et
- * vestiges épars. Ombres portées réelles par la lumière sidérale.
+ * grandes portes de bronze ouvragées, torchères, galaxie de particules,
+ * bosquets de cyprès et vestiges sur la terre sableuse de l'esplanade.
  */
 export default function FacadeScene({
   entering,
@@ -416,10 +727,13 @@ export default function FacadeScene({
 }) {
   const { camera } = useThree();
 
-  // Suivi de l'approche : instant de départ et position initiale figés au
-  // premier frame d'entrée pour une interpolation parfaitement fluide.
+  // Suivi de l'approche : instant de départ, position ET regard figés au
+  // premier frame d'entrée pour une interpolation parfaitement fluide
+  // (aucun accoup même si la souris a décentré le regard).
   const enterStart = useRef<number | null>(null);
   const camStart = useRef(new THREE.Vector3());
+  const lookStart = useRef(new THREE.Vector3());
+  const lookCurrent = useRef(new THREE.Vector3(0, 10.4, 0));
   const leftDoor = useRef<THREE.Group>(null);
   const rightDoor = useRef<THREE.Group>(null);
   const interiorLight = useRef<THREE.PointLight>(null);
@@ -428,12 +742,13 @@ export default function FacadeScene({
   const marble = useMemo(() => marbleSurface(), []);
   const marbleWall = useMemo(() => setRepeat(travertineSurface(), 4, 2.4), []);
   const bronze = useMemo(() => bronzeSurface(), []);
-  const esplanade = useMemo(() => setRepeat(esplanadeSurface(), 9, 9), []);
+  const sand = useMemo(() => setRepeat(sandSurface(), 13, 13), []);
   const flutes = useMemo(() => {
     const t = fluteTexture();
     t.repeat.set(4, 1);
     return t;
   }, []);
+  const flame = useMemo(() => flameTexture(), []);
   const doorGlow = useMemo(() => new THREE.CanvasTexture(glowCanvas("rgba(255, 206, 138, 0.9)")), []);
   const blob = useMemo(() => shadowBlobTexture(), []);
 
@@ -446,10 +761,11 @@ export default function FacadeScene({
   useFrame(({ pointer, clock }, delta) => {
     if (entering) {
       // On fige le point de départ réel : l'approche part exactement d'où se
-      // trouve le visiteur, sans aucun saut vers le haut.
+      // trouve le visiteur (position et regard), sans aucun saut.
       if (enterStart.current === null) {
         enterStart.current = clock.elapsedTime;
         camStart.current.copy(camera.position);
+        lookStart.current.copy(lookCurrent.current);
       }
       const t = THREE.MathUtils.clamp(
         (clock.elapsedTime - enterStart.current) / ENTER_DURATION,
@@ -467,7 +783,12 @@ export default function FacadeScene({
       camera.position.y = THREE.MathUtils.lerp(camStart.current.y, eyeY, e);
       camera.position.z = THREE.MathUtils.lerp(camStart.current.z, targetZ, e);
       // Le regard descend en douceur du fronton vers la baie lumineuse.
-      camera.lookAt(0, THREE.MathUtils.lerp(10.4, PODIUM_HEIGHT + 2.8, e), THREE.MathUtils.lerp(0, -14, e));
+      lookCurrent.current.set(
+        THREE.MathUtils.lerp(lookStart.current.x, 0, e),
+        THREE.MathUtils.lerp(lookStart.current.y, PODIUM_HEIGHT + 2.8, e),
+        THREE.MathUtils.lerp(lookStart.current.z, -14, e)
+      );
+      camera.lookAt(lookCurrent.current);
 
       // Les battants s'ouvrent en grand, un peu en avance sur la marche.
       const open = THREE.MathUtils.lerp(
@@ -486,12 +807,16 @@ export default function FacadeScene({
       if (interiorGlow.current) interiorGlow.current.opacity = glow;
     } else {
       enterStart.current = null;
-      // Regard levé vers le fronton : sentiment de monumentalité
+      // Regard levé vers le fronton ; position ET cible du regard amorties
+      // pour un suivi de souris soyeux, sans à-coups.
       const breathe = Math.sin(clock.elapsedTime * 0.4) * 0.1;
-      camera.position.x = THREE.MathUtils.damp(camera.position.x, pointer.x * 1.8, 1.4, delta);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, 2 + breathe + pointer.y * 0.6, 1.4, delta);
+      camera.position.x = THREE.MathUtils.damp(camera.position.x, pointer.x * 1.8, 1.6, delta);
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, 2 + breathe + pointer.y * 0.6, 1.6, delta);
       camera.position.z = THREE.MathUtils.damp(camera.position.z, 25, 1.2, delta);
-      camera.lookAt(0, 10.4 + pointer.y * 1.2, 0);
+      lookCurrent.current.x = THREE.MathUtils.damp(lookCurrent.current.x, pointer.x * 1.4, 1.6, delta);
+      lookCurrent.current.y = THREE.MathUtils.damp(lookCurrent.current.y, 10.4 + pointer.y * 1.2, 1.6, delta);
+      lookCurrent.current.z = THREE.MathUtils.damp(lookCurrent.current.z, 0, 1.6, delta);
+      camera.lookAt(lookCurrent.current);
 
       // Les portes se referment doucement (retour du couloir au parvis).
       if (leftDoor.current)
@@ -517,7 +842,7 @@ export default function FacadeScene({
       <color attach="background" args={["#05070f"]} />
       <fog attach="fog" args={["#0c0b16", 32, 115]} />
       <SkyDome />
-      <Galaxy />
+      <Galaxy count={highQuality ? 80000 : 24000} />
 
       {/* Réflexions d'environnement nocturne (procédural, sans réseau) */}
       <Environment resolution={64} frames={1}>
@@ -527,6 +852,7 @@ export default function FacadeScene({
       </Environment>
 
       <ambientLight intensity={0.14} />
+      <hemisphereLight args={["#2c3a58", "#3a2f1e", 0.22]} />
       {/* Lumière sidérale : la source d'ombres */}
       <directionalLight
         castShadow={highQuality}
@@ -544,11 +870,12 @@ export default function FacadeScene({
       />
       <Stars />
 
-      {/* Esplanade dallée */}
+      {/* Terre sableuse de l'esplanade */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 8]} receiveShadow>
-        <planeGeometry args={[160, 160]} />
-        <meshStandardMaterial {...esplanade} bumpScale={0.8} />
+        <planeGeometry args={[170, 170]} />
+        <meshStandardMaterial {...sand} bumpScale={1.3} />
       </mesh>
+      <ScatterStones />
 
       {/* Grand escalier sur toute la largeur */}
       {Array.from({ length: 7 }, (_, i) => (
@@ -684,40 +1011,45 @@ export default function FacadeScene({
 
       <Pediment marble={marble} />
 
-      {/* Torches du parvis */}
-      <Torch x={-TEMPLE_WIDTH / 2 - 2.2} z={6.2} />
-      <Torch x={TEMPLE_WIDTH / 2 + 2.2} z={6.2} />
+      {/* Éclairage rasant de la colonnade */}
+      <Uplight x={-7.4} />
+      <Uplight x={7.4} />
 
-      {/* Cyprès et vestiges sur l'esplanade */}
-      <Cypress x={-TEMPLE_WIDTH / 2 - 9} z={-4} height={11} />
-      <Cypress x={-TEMPLE_WIDTH / 2 - 13} z={4} height={8.5} />
-      <Cypress x={TEMPLE_WIDTH / 2 + 10} z={-2} height={12} />
-      <Cypress x={TEMPLE_WIDTH / 2 + 14} z={6} height={9} />
-      {/* Tambour de colonne effondré */}
-      <mesh position={[12.5, 0.5, 12]} rotation={[0, 0.6, Math.PI / 2]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.55, 0.55, 1.9, 22]} />
-        <meshStandardMaterial {...marble} bumpScale={0.7} />
-      </mesh>
-      <mesh position={[-11.5, 0.32, 13.5]} rotation={[0.1, 0.9, 0.06]} castShadow receiveShadow>
-        <boxGeometry args={[1.5, 0.7, 1.1]} />
-        <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
-      </mesh>
+      {/* Torchères : paire au pied de l'escalier, paire le long de l'allée */}
+      <Torch x={-TEMPLE_WIDTH / 2 - 3.4} z={7} flame={flame} stone={marbleWall} />
+      <Torch x={TEMPLE_WIDTH / 2 + 3.4} z={7} flame={flame} stone={marbleWall} />
+      <Torch x={-6.2} z={17.5} scale={0.85} flame={flame} stone={marbleWall} />
+      <Torch x={6.2} z={17.5} scale={0.85} flame={flame} stone={marbleWall} />
+
+      {/* Bosquets de cyprès */}
+      {CYPRESSES.map(([x, z, height]) => (
+        <Cypress key={`${x}-${z}`} x={x} z={z} height={height} />
+      ))}
+
+      {/* Vestiges épars */}
+      <Ruins marble={marble} marbleWall={marbleWall} blob={blob} />
 
       {/* Ombres de contact au sol */}
       {columnXs.map((x) => (
         <Blob key={`blob-${x}`} x={x} z={0} y={PODIUM_HEIGHT + 0.01} radius={1.15} opacity={0.42} texture={blob} />
       ))}
-      <Blob x={-TEMPLE_WIDTH / 2 - 2.2} z={6.2} radius={0.9} opacity={0.4} texture={blob} />
-      <Blob x={TEMPLE_WIDTH / 2 + 2.2} z={6.2} radius={0.9} opacity={0.4} texture={blob} />
-      <Blob x={12.5} z={12} radius={2} opacity={0.45} texture={blob} />
-      <Blob x={-11.5} z={13.5} radius={1.5} opacity={0.45} texture={blob} />
-      <Blob x={-TEMPLE_WIDTH / 2 - 9} z={-4} radius={2.2} opacity={0.5} texture={blob} />
-      <Blob x={-TEMPLE_WIDTH / 2 - 13} z={4} radius={1.7} opacity={0.5} texture={blob} />
-      <Blob x={TEMPLE_WIDTH / 2 + 10} z={-2} radius={2.4} opacity={0.5} texture={blob} />
-      <Blob x={TEMPLE_WIDTH / 2 + 14} z={6} radius={1.8} opacity={0.5} texture={blob} />
+      <Blob x={-TEMPLE_WIDTH / 2 - 3.4} z={7} radius={1} opacity={0.42} texture={blob} />
+      <Blob x={TEMPLE_WIDTH / 2 + 3.4} z={7} radius={1} opacity={0.42} texture={blob} />
+      <Blob x={-6.2} z={17.5} radius={0.85} opacity={0.4} texture={blob} />
+      <Blob x={6.2} z={17.5} radius={0.85} opacity={0.4} texture={blob} />
+      {CYPRESSES.map(([x, z, height]) => (
+        <Blob
+          key={`cblob-${x}-${z}`}
+          x={x}
+          z={z}
+          radius={height * 0.18}
+          opacity={0.5}
+          texture={blob}
+        />
+      ))}
 
       {/* Halo chaud montant du parvis */}
-      <pointLight position={[0, 3.5, 12]} color="#e8cd9c" intensity={12} distance={30} decay={2} />
+      <pointLight position={[0, 3.5, 12]} color="#e8cd9c" intensity={9} distance={28} decay={2} />
     </>
   );
 }

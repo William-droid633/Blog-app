@@ -285,16 +285,16 @@ export default function Museum3D({
 
       {/* Façade : bouton ENTRER dans l'axe de la porte */}
       {phase === "facade" && !veil && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-[16%] flex flex-col items-center gap-5">
-          <p className="text-[11px] uppercase tracking-widecaps text-parchment/50">
-            Le musée vous attend
-          </p>
+        <div className="pointer-events-none absolute inset-x-0 bottom-[15%] flex justify-center">
           <button
             type="button"
             onClick={enter}
-            className="pointer-events-auto border border-gold/60 bg-night/55 px-12 py-4 font-display text-sm font-bold uppercase tracking-widecaps text-goldlight backdrop-blur-sm transition-all duration-300 hover:border-gold hover:bg-gold hover:text-night"
+            className="group pointer-events-auto relative px-16 py-[18px] font-display text-sm font-bold uppercase tracking-widecaps text-goldlight transition-colors duration-500 hover:text-night"
           >
-            Entrer
+            {/* Double liseré d'or, fond fumé, lueur au survol */}
+            <span className="absolute inset-0 border border-gold/45 bg-night/40 backdrop-blur-[2px] transition-all duration-500 group-hover:border-gold group-hover:bg-gold/90 group-hover:shadow-[0_0_46px_rgba(201,163,106,0.4)]" />
+            <span className="absolute inset-[5px] border border-gold/25 transition-colors duration-500 group-hover:border-night/25" />
+            <span className="relative">Entrer</span>
           </button>
         </div>
       )}
@@ -355,7 +355,7 @@ export default function Museum3D({
         }`}
       >
         <p className="animate-pulse font-display text-2xl font-bold tracking-widecaps text-gold/80">
-          MVSEVM
+          HERKVL
         </p>
       </div>
 
