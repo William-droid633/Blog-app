@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import ReadingProgress from "@/components/gallery/ReadingProgress";
+import Reveal from "@/components/gallery/Reveal";
 import { createClient } from "@/lib/supabase-server";
 import { excerptFromHtml } from "@/lib/excerpt";
 import { formatDate } from "@/lib/format-date";
@@ -26,7 +29,7 @@ async function getPost(slug: string): Promise<Post | null> {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getPost(params.slug);
   if (!post) {
-    return { title: "Article introuvable" };
+    return { title: "Œuvre introuvable" };
   }
   return {
     title: post.title,
@@ -42,27 +45,84 @@ export default async function ArticlePage({ params }: Props) {
   }
 
   return (
-    <article className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
-      <header className="mb-8">
-        <time dateTime={post.created_at} className="text-sm text-mocha">
-          {formatDate(post.created_at)}
-        </time>
-        <h1 className="mt-2 font-display text-3xl font-bold leading-tight text-ink sm:text-4xl">
-          {post.title}
-        </h1>
-        {post.cover_image && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={post.cover_image}
-            alt=""
-            className="mt-6 max-h-[480px] w-full rounded-xl object-cover"
+    <article className="relative">
+      <ReadingProgress />
+
+      {/* Salle d'exposition : l'œuvre en pleine lumière */}
+      <header className="relative flex min-h-[72svh] items-end overflow-hidden">
+        {post.cover_image ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={post.cover_image}
+              alt=""
+              className="absolute inset-0 h-full w-full scale-105 object-cover"
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(to top, #0c0a08 4%, rgba(12,10,8,0.55) 45%, rgba(12,10,8,0.35) 100%)",
+              }}
+              aria-hidden="true"
+            />
+          </>
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(900px 500px at 50% 0%, rgba(201,163,106,0.16), transparent 70%), linear-gradient(180deg, #14100c 0%, #0c0a08 100%)",
+            }}
+            aria-hidden="true"
           />
         )}
+        {/* Vignettage */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at center, transparent 50%, rgba(12,10,8,0.7) 100%)",
+          }}
+          aria-hidden="true"
+        />
+
+        <div className="relative z-10 mx-auto w-full max-w-4xl px-4 pb-16 pt-40 sm:px-6 sm:pb-20">
+          <Reveal>
+            <p className="text-[11px] uppercase tracking-widecaps text-gold">
+              <time dateTime={post.created_at}>{formatDate(post.created_at)}</time>
+            </p>
+            <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.1] text-parchment sm:text-6xl">
+              {post.title}
+            </h1>
+            <div className="mt-8 h-px w-32 bg-gradient-to-r from-gold to-transparent" />
+          </Reveal>
+        </div>
       </header>
-      <div
-        className="rich-text"
-        dangerouslySetInnerHTML={{ __html: post.content ?? "" }}
-      />
+
+      {/* Le cartel : contenu sur panneau papier, fidèle à l'éditeur */}
+      <div className="mx-auto w-full max-w-4xl px-4 pb-24 sm:px-6">
+        <Reveal>
+          <div className="rounded-sm bg-cream p-6 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] ring-1 ring-gold/20 sm:p-12 md:p-16">
+            <div
+              className="rich-text"
+              dangerouslySetInnerHTML={{ __html: post.content ?? "" }}
+            />
+          </div>
+        </Reveal>
+
+        <div className="mt-14 flex justify-center">
+          <Link
+            href="/"
+            className="group inline-flex items-center gap-3 border border-gold/40 px-7 py-3.5 text-[11px] uppercase tracking-widecaps text-gold transition-all duration-300 hover:border-gold hover:bg-gold hover:text-night"
+          >
+            <span aria-hidden="true" className="transition-transform duration-300 group-hover:-translate-x-1">
+              ←
+            </span>
+            Retour à la galerie
+          </Link>
+        </div>
+      </div>
     </article>
   );
 }

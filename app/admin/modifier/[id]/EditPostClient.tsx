@@ -40,6 +40,7 @@ export default function EditPostClient({ id }: { id: string }) {
 
   if (notFound) {
     return (
+      <div className="w-full flex-1 bg-cream pt-24 text-ink">
       <div className="mx-auto max-w-3xl px-4 py-20 text-center">
         <h1 className="font-display text-2xl font-bold text-chestnut">
           Article introuvable
@@ -54,12 +55,13 @@ export default function EditPostClient({ id }: { id: string }) {
           Retour au tableau de bord
         </Link>
       </div>
+      </div>
     );
   }
 
   if (!post) {
     return (
-      <div className="flex justify-center py-24">
+      <div className="flex w-full flex-1 justify-center bg-cream pt-40">
         <Loader2 className="animate-spin text-mocha" size={28} />
       </div>
     );

@@ -8,6 +8,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /* — Galerie (façade publique, sombre) — */
+        night: "#0C0A08",
+        coal: "#14100C",
+        smoke: "#1E1812",
+        gold: "#C9A36A",
+        goldlight: "#E8CD9C",
+        parchment: "#F3ECDD",
+
+        /* — Palette chaude (admin, claire) — */
         cream: "#FAF6EF",
         sand: "#F1E7D7",
         latte: "#E3D3BC",
@@ -19,7 +28,27 @@ const config: Config = {
       },
       fontFamily: {
         display: ["var(--font-display)", "Georgia", "serif"],
-        body: ["var(--font-body)", "system-ui", "Segoe UI", "sans-serif"],
+        body: ["var(--font-sans)", "system-ui", "Segoe UI", "sans-serif"],
+        serif: ["var(--font-serif)", "Georgia", "serif"],
+      },
+      letterSpacing: {
+        widecaps: "0.3em",
+      },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        scrollcue: {
+          "0%": { transform: "scaleY(0)", transformOrigin: "top" },
+          "45%": { transform: "scaleY(1)", transformOrigin: "top" },
+          "55%": { transform: "scaleY(1)", transformOrigin: "bottom" },
+          "100%": { transform: "scaleY(0)", transformOrigin: "bottom" },
+        },
+      },
+      animation: {
+        marquee: "marquee 28s linear infinite",
+        scrollcue: "scrollcue 2.2s ease-in-out infinite",
       },
     },
   },

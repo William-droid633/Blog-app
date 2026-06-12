@@ -1,29 +1,47 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { SITE_NAME } from "@/lib/config";
 
 export default function Header() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-40 border-b border-latte bg-cream/90 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-        <Link href="/" className="flex min-h-11 items-center gap-3">
+    <header
+      className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
+        scrolled
+          ? "border-b border-parchment/10 bg-night/80 backdrop-blur-md"
+          : "border-b border-transparent bg-transparent"
+      }`}
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <Link href="/" className="group flex min-h-11 items-center gap-3">
           {/* Logo fourni par le propriétaire du site — placer le fichier
               dans /public/logo.svg, ne jamais le remplacer par un autre visuel */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt={`Logo ${SITE_NAME}`} className="h-10 w-auto" />
-          <span className="font-display text-2xl font-bold text-chestnut">
+          <span className="font-display text-2xl font-semibold tracking-wide text-parchment transition-colors group-hover:text-goldlight">
             {SITE_NAME}
           </span>
         </Link>
-        <nav className="flex items-center gap-1 text-sm font-semibold text-mocha">
+        <nav className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-widecaps">
           <Link
             href="/"
-            className="rounded-lg px-3 py-2.5 transition-colors hover:bg-sand hover:text-chestnut"
+            className="relative px-3 py-2.5 text-parchment/60 transition-colors after:absolute after:bottom-1 after:left-3 after:right-3 after:h-px after:origin-left after:scale-x-0 after:bg-gold after:transition-transform after:duration-300 hover:text-goldlight hover:after:scale-x-100"
           >
-            Accueil
+            Galerie
           </Link>
           <Link
             href="/admin"
-            className="rounded-lg px-3 py-2.5 transition-colors hover:bg-sand hover:text-chestnut"
+            className="relative px-3 py-2.5 text-parchment/60 transition-colors after:absolute after:bottom-1 after:left-3 after:right-3 after:h-px after:origin-left after:scale-x-0 after:bg-gold after:transition-transform after:duration-300 hover:text-goldlight hover:after:scale-x-100"
           >
             Admin
           </Link>

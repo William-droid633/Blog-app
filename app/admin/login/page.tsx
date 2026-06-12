@@ -35,7 +35,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mx-auto flex max-w-md flex-col px-4 py-12 sm:py-20">
+    <div className="w-full flex-1 bg-cream pb-16 pt-28 text-ink sm:pt-32">
+      <div className="mx-auto flex max-w-md flex-col px-4">
       <h1 className="text-center font-display text-2xl font-bold text-chestnut sm:text-3xl">
         Administration de {SITE_NAME}
       </h1>
@@ -98,6 +99,7 @@ export default function LoginPage() {
           Se connecter
         </button>
       </form>
+      </div>
     </div>
   );
 }
