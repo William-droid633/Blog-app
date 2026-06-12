@@ -42,6 +42,18 @@ export function setRepeat(surface: SurfaceMaps, x: number, y: number): SurfaceMa
   return surface;
 }
 
+/**
+ * Clone léger d'une surface : mêmes canvas sources, textures distinctes —
+ * permet des répétitions différentes par mur sans re-générer le matériau.
+ */
+export function cloneSurface(surface: SurfaceMaps): SurfaceMaps {
+  return {
+    map: surface.map.clone() as THREE.CanvasTexture,
+    bumpMap: surface.bumpMap.clone() as THREE.CanvasTexture,
+    roughnessMap: surface.roughnessMap.clone() as THREE.CanvasTexture,
+  };
+}
+
 /** Marbre blanc-crème veiné (colonnes, corniches, encadrements). */
 export function marbleSurface(size = 512): SurfaceMaps {
   const base = hexToRgb("#ddd6c4");
@@ -212,6 +224,59 @@ export function sandSurface(size = 1024): SurfaceMaps {
   );
 }
 
+/**
+ * Grand appareil de travertin : assises de blocs en quinconce, joints
+ * fins creusés, ton légèrement différent par bloc, surface piquée —
+ * pour les murs de la cella et les antes, bien plus crédible qu'une
+ * nappe de pierre uniforme.
+ */
+export function ashlarSurface(size = 1024): SurfaceMaps {
+  const light = hexToRgb("#cbbd9e");
+  const band = hexToRgb("#b0a07e");
+  const pitTone = hexToRgb("#6f6248");
+  const jointTone = hexToRgb("#564b35");
+
+  const rows = 5;
+  const cols = 2.5; // blocs deux fois plus larges que hauts
+
+  return toSurface(
+    bakeSurface(size, (u, v) => {
+      const rv = v * rows;
+      const row = Math.floor(rv);
+      const offset = (row % 2) * 0.5;
+      const cu = u * cols + offset;
+      const col = Math.floor(cu);
+      const fu = cu - col;
+      const fv = rv - row;
+
+      // Joints biseautés (égalisés malgré l'anisotropie des blocs)
+      const jx = Math.min(fu, 1 - fu) * 2;
+      const jy = Math.min(fv, 1 - fv);
+      const j = Math.min(jx, jy);
+      const joint = j < 0.045 ? (0.045 - j) / 0.045 : 0;
+
+      // Ton propre à chaque bloc + nuages de surface
+      const blockTone = fbm(col * 7.13 + row * 3.71, row * 9.17 + col * 1.3, 2);
+      const warp = fbm(u * 6 + col * 0.7, v * 6 + row * 1.4, 4);
+      // Piqûres du travertin
+      const pores = turbulence(u * 30 + 8.2, v * 30 + 2.6, 3);
+      const pore = pores < 0.13 ? (0.13 - pores) / 0.13 : 0;
+      const grain = fbm(u * 44 + 21, v * 44 + 7, 3);
+
+      let color = mix(light, band, (blockTone - 0.5) * 1.3 + (warp - 0.5) * 0.5);
+      color = mix(color, hexToRgb("#d8cba9"), (grain - 0.5) * 0.3);
+      color = mix(color, pitTone, pore * 0.6);
+      color = mix(color, jointTone, joint * 0.9);
+
+      return {
+        color,
+        bump: 0.62 - joint * 0.5 - pore * 0.3 + (warp - 0.5) * 0.1 + (grain - 0.5) * 0.08,
+        rough: 0.8 + pore * 0.15 - (blockTone - 0.5) * 0.08,
+      };
+    })
+  );
+}
+
 /* ————— Textures dessinées (non PBR) ————— */
 
 function makeCanvas(width: number, height = width): [HTMLCanvasElement, CanvasRenderingContext2D] {
@@ -297,6 +362,71 @@ export function lightBeamTexture(size = 256): THREE.CanvasTexture {
   ctx.globalCompositeOperation = "source-over";
 
   return toTexture(canvas, true, false);
+}
+
+function drawInscription(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, text: string) {
+  const family =
+    (typeof document !== "undefined" &&
+      getComputedStyle(document.documentElement).getPropertyValue("--font-display").trim()) ||
+    "";
+  const fontStack = family ? `${family}, Georgia, serif` : "Georgia, serif";
+  const fontSize = canvas.height * 0.56;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = `700 ${fontSize}px ${fontStack}`;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+
+  // Lettrage espacé, centré (interlettrage manuel : fiable partout)
+  const tracking = fontSize * 0.5;
+  const chars = Array.from(text);
+  const widths = chars.map((c) => ctx.measureText(c).width);
+  const total = widths.reduce((a, b) => a + b, 0) + tracking * (chars.length - 1);
+  const startX = (canvas.width - total) / 2;
+  const cy = canvas.height / 2;
+
+  // Trois passes : creux sombre, rehaut clair, lettre dorée — effet gravé
+  const passes: Array<[number, string]> = [
+    [4, "rgba(0,0,0,0.6)"],
+    [-3, "rgba(255,240,200,0.28)"],
+  ];
+  for (const [dy, style] of passes) {
+    ctx.fillStyle = style;
+    let x = startX;
+    chars.forEach((c, i) => {
+      ctx.fillText(c, x, cy + dy);
+      x += widths[i] + tracking;
+    });
+  }
+  const gold = ctx.createLinearGradient(0, cy - fontSize / 2, 0, cy + fontSize / 2);
+  gold.addColorStop(0, "#b5905a");
+  gold.addColorStop(0.5, "#9a7a45");
+  gold.addColorStop(1, "#7d6136");
+  ctx.fillStyle = gold;
+  let x = startX;
+  chars.forEach((c, i) => {
+    ctx.fillText(c, x, cy);
+    x += widths[i] + tracking;
+  });
+}
+
+/**
+ * Inscription monumentale gravée, rendue sur canvas et plaquée sur la
+ * frise — entièrement dans la scène WebGL : elle apparaît et disparaît
+ * exactement avec le temple (contrairement à un élément DOM superposé).
+ * Redessinée quand les polices web sont prêtes.
+ */
+export function inscriptionTexture(text: string, width = 2048, height = 256): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(width, height);
+  drawInscription(canvas, ctx, text);
+  const texture = toTexture(canvas, true, false);
+  if (typeof document !== "undefined" && document.fonts?.ready) {
+    document.fonts.ready.then(() => {
+      drawInscription(canvas, ctx, text);
+      texture.needsUpdate = true;
+    });
+  }
+  return texture;
 }
 
 /** Œuvre de remplacement quand un article n'a pas d'image. */

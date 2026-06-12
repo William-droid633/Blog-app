@@ -2,22 +2,25 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Html, Instances, Instance, Environment, Lightformer } from "@react-three/drei";
+import { Instances, Instance, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import Galaxy from "./Galaxy";
 import { fbm } from "./noise";
 import {
   marbleSurface,
   travertineSurface,
+  ashlarSurface,
   bronzeSurface,
   sandSurface,
   fluteTexture,
   flameTexture,
   softParticleTexture,
+  inscriptionTexture,
   starPositions,
   skyGradientTexture,
   shadowBlobTexture,
   setRepeat,
+  cloneSurface,
   type SurfaceMaps,
 } from "./textures";
 
@@ -32,10 +35,18 @@ const PEDIMENT_HEIGHT = 3.4;
 const PORCH_DEPTH = 5;
 
 const ENTAB_Y = PODIUM_HEIGHT + 0.5 + COLUMN_HEIGHT + 0.42;
+const CELLA_WALL_WIDTH = TEMPLE_WIDTH - 1.4;
+const CELLA_WALL_HEIGHT = COLUMN_HEIGHT + 1;
+const CELLA_Z = -PORCH_DEPTH - 0.4;
 
-/* Battants de bronze : entrebâillés au repos, grands ouverts à l'entrée. */
-const DOOR_AJAR = 0.12;
-const DOOR_OPEN = 1.2;
+/* — La grande porte : baie réelle percée dans la cella, toujours ouverte — */
+const BAY_WIDTH = 4.4;
+const BAY_HEIGHT = 6.9;
+const LEAF_WIDTH = 2.1;
+const LEAF_HEIGHT = 6.6;
+/* Battants rabattus contre les murs du vestibule (~83°). */
+const DOOR_OPEN_ANGLE = 1.45;
+const VESTIBULE_DEPTH = 4.2;
 /* Durée de l'approche (s) ; doit correspondre au minuteur de Museum3D. */
 const ENTER_DURATION = 2.4;
 
@@ -174,6 +185,235 @@ function Column({
   );
 }
 
+/* ——— Statuaire du fronton ——— */
+
+type StatuePose = "hercules" | "toga" | "seated" | "reclining";
+
+/**
+ * Statue de marbre simplifiée mais bien proportionnée — vue à plus de
+ * vingt mètres, dans l'ombre du fronton rasée par la lumière : la
+ * silhouette fait tout. Quatre poses canoniques de fronton : figure
+ * centrale debout (Hercule à la massue et à la peau de lion), figures
+ * drapées en pied, assises, puis couchées vers les angles.
+ */
+function Statue({
+  x,
+  h,
+  pose,
+  mirror = false,
+  marble,
+}: {
+  x: number;
+  h: number;
+  pose: StatuePose;
+  mirror?: boolean;
+  marble: SurfaceMaps;
+}) {
+  const m = mirror ? -1 : 1;
+  const material = <meshStandardMaterial {...marble} bumpScale={0.4} color="#d8cfba" />;
+
+  const robe = useMemo(() => {
+    if (pose !== "toga") return null;
+    const profile: Array<[number, number]> = [
+      [0.06, 0],
+      [0.16, 0.02],
+      [0.13, 0.18],
+      [0.12, 0.38],
+      [0.14, 0.52],
+      [0.105, 0.68],
+      [0.085, 0.78],
+    ];
+    return new THREE.LatheGeometry(
+      profile.map(([r, y]) => new THREE.Vector2(r * h, y * h)),
+      14
+    );
+  }, [pose, h]);
+
+  return (
+    <group position={[x, 0, 0]}>
+      {pose === "hercules" && (
+        <>
+          {/* Jambes en appui décalé */}
+          <mesh position={[-0.07 * h, 0.24 * h, 0]} castShadow>
+            <cylinderGeometry args={[0.05 * h, 0.066 * h, 0.48 * h, 10]} />
+            {material}
+          </mesh>
+          <mesh position={[0.09 * h, 0.23 * h, 0.04 * h]} rotation={[0.14, 0, -0.07]} castShadow>
+            <cylinderGeometry args={[0.05 * h, 0.066 * h, 0.46 * h, 10]} />
+            {material}
+          </mesh>
+          {/* Torse en V */}
+          <mesh position={[0, 0.62 * h, 0]} castShadow>
+            <cylinderGeometry args={[0.135 * h, 0.095 * h, 0.34 * h, 12]} />
+            {material}
+          </mesh>
+          <mesh position={[0, 0.79 * h, 0]} scale={[1.45, 0.55, 0.95]} castShadow>
+            <sphereGeometry args={[0.115 * h, 12, 10]} />
+            {material}
+          </mesh>
+          {/* Tête */}
+          <mesh position={[0, 0.9 * h, 0.01 * h]} castShadow>
+            <sphereGeometry args={[0.078 * h, 12, 10]} />
+            {material}
+          </mesh>
+          {/* Bras droit descendant vers la massue */}
+          <mesh position={[0.17 * h * m, 0.6 * h, 0.02 * h]} rotation={[0, 0, -0.5 * m]} castShadow>
+            <cylinderGeometry args={[0.032 * h, 0.04 * h, 0.36 * h, 8]} />
+            {material}
+          </mesh>
+          {/* Massue posée au sol */}
+          <mesh position={[0.28 * h * m, 0.26 * h, 0.06 * h]} rotation={[0.1, 0, 0.18 * m]} castShadow>
+            <cylinderGeometry args={[0.055 * h, 0.02 * h, 0.5 * h, 9]} />
+            {material}
+          </mesh>
+          {/* Bras gauche replié, peau du lion de Némée sur l'avant-bras */}
+          <mesh position={[-0.16 * h * m, 0.68 * h, 0.05 * h]} rotation={[0.4, 0, 0.9 * m]} castShadow>
+            <cylinderGeometry args={[0.03 * h, 0.038 * h, 0.3 * h, 8]} />
+            {material}
+          </mesh>
+          <mesh position={[-0.25 * h * m, 0.5 * h, 0.05 * h]} rotation={[0.15, 0, 0.12 * m]} castShadow>
+            <coneGeometry args={[0.09 * h, 0.36 * h, 8]} />
+            {material}
+          </mesh>
+        </>
+      )}
+
+      {pose === "toga" && robe && (
+        <>
+          {/* Drapé tombant jusqu'aux pieds */}
+          <mesh geometry={robe} castShadow>
+            {material}
+          </mesh>
+          <mesh position={[0, 0.8 * h, 0]} scale={[1.35, 0.5, 0.85]} castShadow>
+            <sphereGeometry args={[0.1 * h, 12, 10]} />
+            {material}
+          </mesh>
+          <mesh position={[0, 0.895 * h, 0.005 * h]} castShadow>
+            <sphereGeometry args={[0.07 * h, 12, 10]} />
+            {material}
+          </mesh>
+          {/* Bras levé tenant la lance / le sceptre */}
+          <mesh position={[0.15 * h * m, 0.68 * h, 0.02 * h]} rotation={[0, 0, -0.85 * m]} castShadow>
+            <cylinderGeometry args={[0.028 * h, 0.035 * h, 0.3 * h, 8]} />
+            {material}
+          </mesh>
+          <mesh position={[0.235 * h * m, 0.5 * h, 0.03 * h]} castShadow>
+            <cylinderGeometry args={[0.012 * h, 0.012 * h, 0.95 * h, 6]} />
+            {material}
+          </mesh>
+        </>
+      )}
+
+      {pose === "seated" && (
+        <>
+          {/* Siège */}
+          <mesh position={[0, 0.17 * h, -0.06 * h]} castShadow>
+            <boxGeometry args={[0.3 * h, 0.34 * h, 0.26 * h]} />
+            {material}
+          </mesh>
+          {/* Cuisses, jambes */}
+          <mesh position={[0, 0.39 * h, 0.08 * h]} castShadow>
+            <boxGeometry args={[0.24 * h, 0.11 * h, 0.32 * h]} />
+            {material}
+          </mesh>
+          {[-0.07, 0.07].map((dx) => (
+            <mesh key={dx} position={[dx * h, 0.17 * h, 0.21 * h]} castShadow>
+              <cylinderGeometry args={[0.038 * h, 0.045 * h, 0.34 * h, 8]} />
+              {material}
+            </mesh>
+          ))}
+          {/* Buste, épaules, tête */}
+          <mesh position={[0, 0.61 * h, -0.02 * h]} castShadow>
+            <cylinderGeometry args={[0.11 * h, 0.085 * h, 0.34 * h, 10]} />
+            {material}
+          </mesh>
+          <mesh position={[0, 0.79 * h, -0.02 * h]} scale={[1.35, 0.5, 0.85]} castShadow>
+            <sphereGeometry args={[0.095 * h, 12, 10]} />
+            {material}
+          </mesh>
+          <mesh position={[0, 0.88 * h, -0.01 * h]} castShadow>
+            <sphereGeometry args={[0.068 * h, 12, 10]} />
+            {material}
+          </mesh>
+          {/* Bras posé sur la cuisse */}
+          <mesh position={[0.12 * h * m, 0.52 * h, 0.06 * h]} rotation={[0.9, 0, -0.2 * m]} castShadow>
+            <cylinderGeometry args={[0.026 * h, 0.034 * h, 0.3 * h, 8]} />
+            {material}
+          </mesh>
+        </>
+      )}
+
+      {pose === "reclining" && (
+        <>
+          {/* Corps allongé, tête tournée vers le centre */}
+          <mesh position={[0.18 * h * m, 0.24 * h, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.14 * h, 0.17 * h, 1.05 * h, 10]} />
+            {material}
+          </mesh>
+          {/* Buste relevé sur le coude */}
+          <mesh position={[-0.42 * h * m, 0.42 * h, 0]} rotation={[0, 0, 0.85 * m]} castShadow>
+            <cylinderGeometry args={[0.1 * h, 0.12 * h, 0.45 * h, 10]} />
+            {material}
+          </mesh>
+          <mesh position={[-0.56 * h * m, 0.6 * h, 0]} castShadow>
+            <sphereGeometry args={[0.085 * h, 12, 10]} />
+            {material}
+          </mesh>
+          {/* Coude d'appui */}
+          <mesh position={[-0.52 * h * m, 0.22 * h, 0.02 * h]} castShadow>
+            <cylinderGeometry args={[0.035 * h, 0.045 * h, 0.4 * h, 8]} />
+            {material}
+          </mesh>
+        </>
+      )}
+    </group>
+  );
+}
+
+/** Acrotère en palmette : éventail de feuilles sur bulbe. */
+function Palmette({
+  x,
+  y,
+  scale,
+  marble,
+}: {
+  x: number;
+  y: number;
+  scale: number;
+  marble: SurfaceMaps;
+}) {
+  const material = <meshStandardMaterial {...marble} bumpScale={0.5} />;
+  return (
+    <group position={[x, y, 1]} scale={scale}>
+      <mesh castShadow>
+        <boxGeometry args={[0.5, 0.16, 0.36]} />
+        {material}
+      </mesh>
+      <mesh position={[0, 0.18, 0]} scale={[1, 0.65, 0.7]} castShadow>
+        <sphereGeometry args={[0.17, 10, 8]} />
+        {material}
+      </mesh>
+      {[-0.62, -0.31, 0, 0.31, 0.62].map((a) => (
+        <mesh
+          key={a}
+          position={[Math.sin(a) * 0.26, 0.34 + Math.cos(a) * 0.16, 0]}
+          rotation={[0, 0, -a]}
+          castShadow
+        >
+          <coneGeometry args={[0.075, 0.6, 8]} />
+          {material}
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * Fronton sculpté : « Hercule reçu dans l'Olympe ». Composition canonique
+ * d'un fronton romain — héros debout au centre, divinités drapées en pied,
+ * figures assises, puis couchées en s'approchant des angles, posées sur la
+ * plinthe du tympan. Acrotères en palmette aux trois pointes.
+ */
 function Pediment({ marble }: { marble: SurfaceMaps }) {
   const geometry = useMemo(() => {
     const shape = new THREE.Shape();
@@ -190,8 +430,9 @@ function Pediment({ marble }: { marble: SurfaceMaps }) {
 
   return (
     <group position={[0, y, -1]}>
+      {/* Tympan en retrait, légèrement assombri pour détacher les figures */}
       <mesh geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial {...marble} bumpScale={0.6} />
+        <meshStandardMaterial {...marble} bumpScale={0.6} color="#c4bba6" />
       </mesh>
       {/* Corniches rampantes */}
       <mesh
@@ -210,26 +451,28 @@ function Pediment({ marble }: { marble: SurfaceMaps }) {
         <boxGeometry args={[slopeLength, 0.34, 2.4]} />
         <meshStandardMaterial {...marble} bumpScale={0.6} />
       </mesh>
-      {/* Relief du tympan : couronne de laurier en bronze */}
-      <group position={[0, PEDIMENT_HEIGHT * 0.36, 2.04]}>
-        <mesh>
-          <torusGeometry args={[0.95, 0.13, 12, 40]} />
-          <meshStandardMaterial color="#6d4f24" metalness={0.85} roughness={0.4} />
-        </mesh>
-        <mesh>
-          <circleGeometry args={[0.4, 24]} />
-          <meshStandardMaterial color="#56401f" metalness={0.8} roughness={0.45} />
-        </mesh>
+
+      {/* Plinthe sur laquelle se dressent les figures */}
+      <mesh position={[0, 0.12, 1.25]} castShadow receiveShadow>
+        <boxGeometry args={[TEMPLE_WIDTH + 0.8, 0.24, 0.95]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+
+      {/* La scène : Hercule au centre, l'Olympe autour */}
+      <group position={[0, 0.24, 2.18]}>
+        <Statue x={0} h={2.5} pose="hercules" marble={marble} />
+        <Statue x={-2.3} h={2.1} pose="toga" mirror marble={marble} />
+        <Statue x={2.3} h={2.1} pose="toga" marble={marble} />
+        <Statue x={-4.5} h={1.5} pose="seated" mirror marble={marble} />
+        <Statue x={4.5} h={1.5} pose="seated" marble={marble} />
+        <Statue x={-6.9} h={0.85} pose="reclining" mirror marble={marble} />
+        <Statue x={6.9} h={0.85} pose="reclining" marble={marble} />
       </group>
-      {/* Acrotères */}
-      {[[-TEMPLE_WIDTH / 2 - 0.4, 0.34], [0, PEDIMENT_HEIGHT + 0.32], [TEMPLE_WIDTH / 2 + 0.4, 0.34]].map(
-        ([x, ay], i) => (
-          <mesh key={i} position={[x, ay, 1]} castShadow>
-            <sphereGeometry args={[0.34, 14, 10]} />
-            <meshStandardMaterial {...marble} bumpScale={0.6} />
-          </mesh>
-        )
-      )}
+
+      {/* Acrotères en palmette */}
+      <Palmette x={-TEMPLE_WIDTH / 2 - 0.4} y={0.28} scale={1} marble={marble} />
+      <Palmette x={TEMPLE_WIDTH / 2 + 0.4} y={0.28} scale={1} marble={marble} />
+      <Palmette x={0} y={PEDIMENT_HEIGHT + 0.26} scale={1.3} marble={marble} />
     </group>
   );
 }
@@ -252,18 +495,21 @@ function Dentils({ width, y, z }: { width: number; y: number; z: number }) {
 }
 
 /**
- * Torchère de bronze posée au sol : socle de pierre, fût bagué, vasque
- * tournée, braises incandescentes et flammes sur plans croisés animés
- * par flicker — halo additif et lumière vacillante.
+ * Torchère de bronze : socle de pierre, fût bagué, vasque tournée,
+ * braises incandescentes et flammes sur plans croisés animés par
+ * flicker — halo additif et lumière vacillante. `y` permet de la
+ * poser sur une maçonnerie (murs d'échiffre de l'escalier).
  */
 function Torch({
   x,
+  y = 0,
   z,
   scale = 1,
   flame,
   stone,
 }: {
   x: number;
+  y?: number;
   z: number;
   scale?: number;
   flame: THREE.Texture;
@@ -324,7 +570,7 @@ function Torch({
   });
 
   return (
-    <group position={[x, 0, z]} scale={scale}>
+    <group position={[x, y, z]} scale={scale}>
       {/* Socle de pierre octogonal */}
       <mesh position={[0, 0.18, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.46, 0.58, 0.36, 8]} />
@@ -659,52 +905,98 @@ function Uplight({ x }: { x: number }) {
   );
 }
 
-/**
- * Battant de bronze ouvragé : double panneau en relief, anneau de tirage
- * et astragale au bord de jonction. `side` = +1 (battant gauche) ou -1
- * (battant droit), les coordonnées étant exprimées dans le repère du
- * groupe articulé sur le gond.
- */
-function DoorLeaf({ side, bronze }: { side: 1 | -1; bronze: SurfaceMaps }) {
-  const cx = side * 1.05;
-  const innerX = cx + side * 0.86;
+/** Projecteur discret levé vers le fronton sculpté. */
+function PedimentLight() {
+  const target = useMemo(() => {
+    const o = new THREE.Object3D();
+    o.position.set(0, ENTAB_Y + ENTABLATURE_HEIGHT + 1.4, 0.6);
+    return o;
+  }, []);
   return (
     <>
+      <spotLight
+        position={[0, ENTAB_Y - 1.2, 9]}
+        target={target}
+        color="#d9b87a"
+        intensity={240}
+        angle={0.5}
+        penumbra={0.7}
+        distance={30}
+        decay={2}
+      />
+      <primitive object={target} />
+    </>
+  );
+}
+
+/**
+ * Battant de bronze monumental : bâti épais, trois caissons moulurés à
+ * bossette, rangées de clous sur les montants, heurtoir à mufle de lion,
+ * pentures horizontales. `side` = +1 (battant gauche) ou -1 (battant
+ * droit), coordonnées dans le repère du gond.
+ */
+function DoorLeaf({ side, bronze }: { side: 1 | -1; bronze: SurfaceMaps }) {
+  const cx = side * (LEAF_WIDTH / 2);
+  const innerX = cx + side * (LEAF_WIDTH / 2 - 0.18);
+  const studYs = [-2.7, -1.8, -0.9, 0, 0.9, 1.8, 2.7];
+
+  return (
+    <>
+      {/* Vantail massif */}
       <mesh position={[cx, 0, 0]} castShadow>
-        <boxGeometry args={[2.1, 6.6, 0.16]} />
+        <boxGeometry args={[LEAF_WIDTH, LEAF_HEIGHT, 0.22]} />
         <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
       </mesh>
-      {/* Deux panneaux à cadre saillant et fond recreusé */}
-      {[1.5, -1.5].map((py) => (
+      {/* Trois caissons : cadre saillant, fond recreusé, bossette */}
+      {[2.25, 0, -2.25].map((py) => (
         <group key={py} position={[cx, py, 0]}>
-          <mesh position={[0, 0, 0.05]} castShadow>
-            <boxGeometry args={[1.52, 2.3, 0.06]} />
+          <mesh position={[0, 0, 0.09]} castShadow>
+            <boxGeometry args={[1.5, 1.86, 0.07]} />
             <meshStandardMaterial color="#7a5829" metalness={0.8} roughness={0.34} />
           </mesh>
-          <mesh position={[0, 0, 0.08]}>
-            <boxGeometry args={[1.16, 1.94, 0.04]} />
+          <mesh position={[0, 0, 0.12]}>
+            <boxGeometry args={[1.16, 1.5, 0.05]} />
             <meshStandardMaterial {...bronze} bumpScale={0.6} metalness={0.7} />
           </mesh>
-          {/* Bossette centrale */}
-          <mesh position={[0, 0, 0.12]}>
-            <sphereGeometry args={[0.12, 12, 8]} />
+          <mesh position={[0, 0, 0.17]}>
+            <sphereGeometry args={[0.13, 12, 8]} />
             <meshStandardMaterial color="#9a7338" metalness={0.88} roughness={0.3} />
           </mesh>
         </group>
       ))}
-      {/* Astragale au bord de jonction */}
-      <mesh position={[innerX, 0, 0.07]} castShadow>
-        <boxGeometry args={[0.12, 6.5, 0.1]} />
+      {/* Pentures horizontales */}
+      {[2.95, -2.95].map((py) => (
+        <mesh key={py} position={[cx, py, 0.12]} castShadow>
+          <boxGeometry args={[LEAF_WIDTH - 0.08, 0.18, 0.05]} />
+          <meshStandardMaterial color="#6e5026" metalness={0.85} roughness={0.36} />
+        </mesh>
+      ))}
+      {/* Clous de bronze le long des montants */}
+      {studYs.map((py) => (
+        <group key={py}>
+          <mesh position={[cx - side * (LEAF_WIDTH / 2 - 0.16), py, 0.13]}>
+            <sphereGeometry args={[0.05, 8, 6]} />
+            <meshStandardMaterial color="#9a7338" metalness={0.9} roughness={0.3} />
+          </mesh>
+          <mesh position={[cx + side * (LEAF_WIDTH / 2 - 0.16), py, 0.13]}>
+            <sphereGeometry args={[0.05, 8, 6]} />
+            <meshStandardMaterial color="#9a7338" metalness={0.9} roughness={0.3} />
+          </mesh>
+        </group>
+      ))}
+      {/* Astragale couvrant la jonction des vantaux */}
+      <mesh position={[innerX, 0, 0.1]} castShadow>
+        <boxGeometry args={[0.14, LEAF_HEIGHT - 0.1, 0.12]} />
         <meshStandardMaterial color="#7a5829" metalness={0.82} roughness={0.32} />
       </mesh>
-      {/* Anneau de tirage */}
-      <group position={[innerX - side * 0.28, 0.5, 0.12]}>
+      {/* Heurtoir : mufle de lion et anneau */}
+      <group position={[innerX - side * 0.34, 0.55, 0.16]}>
         <mesh>
-          <torusGeometry args={[0.22, 0.05, 10, 24]} />
-          <meshStandardMaterial color="#9a7338" metalness={0.9} roughness={0.3} />
+          <sphereGeometry args={[0.13, 12, 10]} />
+          <meshStandardMaterial color="#8a6530" metalness={0.85} roughness={0.32} />
         </mesh>
-        <mesh position={[0, 0.24, 0]}>
-          <sphereGeometry args={[0.1, 12, 8]} />
+        <mesh position={[0, -0.16, 0.05]} rotation={[0.25, 0, 0]}>
+          <torusGeometry args={[0.15, 0.035, 10, 22]} />
           <meshStandardMaterial color="#9a7338" metalness={0.9} roughness={0.3} />
         </mesh>
       </group>
@@ -714,9 +1006,11 @@ function DoorLeaf({ side, bronze }: { side: 1 | -1; bronze: SurfaceMaps }) {
 
 /**
  * Façade monumentale du temple, de nuit : huit colonnes cannelées sur
- * podium à grand escalier, entablement denticulé, fronton à acrotères,
- * grandes portes de bronze ouvragées, torchères, galaxie de particules,
- * bosquets de cyprès et vestiges sur la terre sableuse de l'esplanade.
+ * podium à grand escalier encadré de murs d'échiffre, entablement
+ * denticulé, fronton sculpté (Hercule reçu dans l'Olympe), grande baie
+ * aux portes de bronze grandes ouvertes sur un vestibule baigné de
+ * lumière, torchères, galaxie de particules, cyprès et vestiges sur la
+ * terre sableuse de l'esplanade.
  */
 export default function FacadeScene({
   entering,
@@ -734,13 +1028,16 @@ export default function FacadeScene({
   const camStart = useRef(new THREE.Vector3());
   const lookStart = useRef(new THREE.Vector3());
   const lookCurrent = useRef(new THREE.Vector3(0, 10.4, 0));
-  const leftDoor = useRef<THREE.Group>(null);
-  const rightDoor = useRef<THREE.Group>(null);
   const interiorLight = useRef<THREE.PointLight>(null);
   const interiorGlow = useRef<THREE.MeshBasicMaterial>(null);
 
   const marble = useMemo(() => marbleSurface(), []);
   const marbleWall = useMemo(() => setRepeat(travertineSurface(), 4, 2.4), []);
+  const ashlar = useMemo(() => ashlarSurface(), []);
+  // Répétitions accordées par pan de mur : blocs de taille constante
+  const cellaSide = useMemo(() => setRepeat(cloneSurface(ashlar), 1.35, 1.75), [ashlar]);
+  const cellaTop = useMemo(() => setRepeat(cloneSurface(ashlar), 0.74, 0.6), [ashlar]);
+  const antaeWall = useMemo(() => setRepeat(cloneSurface(ashlar), 1.05, 1.75), [ashlar]);
   const bronze = useMemo(() => bronzeSurface(), []);
   const sand = useMemo(() => setRepeat(sandSurface(), 13, 13), []);
   const flutes = useMemo(() => {
@@ -749,6 +1046,7 @@ export default function FacadeScene({
     return t;
   }, []);
   const flame = useMemo(() => flameTexture(), []);
+  const inscription = useMemo(() => inscriptionTexture("HERKVL·MVSEVM"), []);
   const doorGlow = useMemo(() => new THREE.CanvasTexture(glowCanvas("rgba(255, 206, 138, 0.9)")), []);
   const blob = useMemo(() => shadowBlobTexture(), []);
 
@@ -774,37 +1072,28 @@ export default function FacadeScene({
       );
       const e = easeInOutCubic(t);
 
-      // Glissé fluide depuis la position de départ jusqu'au seuil même des
-      // portes, à hauteur d'œil — sans franchir la cella (évite tout
-      // passage à travers les murs).
+      // Glissé fluide depuis la position de départ jusque DANS le vestibule :
+      // les portes sont grandes ouvertes, on franchit réellement le seuil
+      // entre les deux vantaux, sans rien traverser.
       const eyeY = PODIUM_HEIGHT + 1.9;
-      const targetZ = -PORCH_DEPTH + 0.26;
+      const targetZ = -PORCH_DEPTH - 1.7;
       camera.position.x = THREE.MathUtils.lerp(camStart.current.x, 0, e);
       camera.position.y = THREE.MathUtils.lerp(camStart.current.y, eyeY, e);
       camera.position.z = THREE.MathUtils.lerp(camStart.current.z, targetZ, e);
-      // Le regard descend en douceur du fronton vers la baie lumineuse.
+      // Le regard descend en douceur du fronton vers le cœur lumineux.
       lookCurrent.current.set(
         THREE.MathUtils.lerp(lookStart.current.x, 0, e),
-        THREE.MathUtils.lerp(lookStart.current.y, PODIUM_HEIGHT + 2.8, e),
-        THREE.MathUtils.lerp(lookStart.current.z, -14, e)
+        THREE.MathUtils.lerp(lookStart.current.y, PODIUM_HEIGHT + 2.6, e),
+        THREE.MathUtils.lerp(lookStart.current.z, -16, e)
       );
       camera.lookAt(lookCurrent.current);
 
-      // Les battants s'ouvrent en grand, un peu en avance sur la marche.
-      const open = THREE.MathUtils.lerp(
-        DOOR_AJAR,
-        DOOR_OPEN,
-        easeInOutCubic(Math.min(t * 1.3, 1))
-      );
-      if (leftDoor.current) leftDoor.current.rotation.y = open;
-      if (rightDoor.current) rightDoor.current.rotation.y = -open;
-
-      // La lumière du sanctuaire n'enfle que sur la fin de l'approche : on
-      // voit d'abord nettement les portes s'ouvrir, puis le blanc nous gagne
-      // une fois le seuil franchi.
+      // La lumière du sanctuaire enfle sur la fin de l'approche : le blanc
+      // nous gagne une fois le seuil franchi.
       const glow = THREE.MathUtils.clamp((e - 0.45) / 0.5, 0, 1);
-      if (interiorLight.current) interiorLight.current.intensity = 20 + glow * 180;
-      if (interiorGlow.current) interiorGlow.current.opacity = glow;
+      if (interiorLight.current) interiorLight.current.intensity = 30 + glow * 190;
+      if (interiorGlow.current)
+        interiorGlow.current.opacity = 0.32 + glow * 0.68;
     } else {
       enterStart.current = null;
       // Regard levé vers le fronton ; position ET cible du regard amorties
@@ -818,15 +1107,10 @@ export default function FacadeScene({
       lookCurrent.current.z = THREE.MathUtils.damp(lookCurrent.current.z, 0, 1.6, delta);
       camera.lookAt(lookCurrent.current);
 
-      // Les portes se referment doucement (retour du couloir au parvis).
-      if (leftDoor.current)
-        leftDoor.current.rotation.y = THREE.MathUtils.damp(leftDoor.current.rotation.y, DOOR_AJAR, 2.4, delta);
-      if (rightDoor.current)
-        rightDoor.current.rotation.y = THREE.MathUtils.damp(rightDoor.current.rotation.y, -DOOR_AJAR, 2.4, delta);
-      if (interiorLight.current) interiorLight.current.intensity = 20;
-      // Lueur résiduelle filtrant par l'entrebâillement au repos.
+      if (interiorLight.current) interiorLight.current.intensity = 30;
+      // Lueur chaude permanente : les portes restent grandes ouvertes.
       if (interiorGlow.current)
-        interiorGlow.current.opacity = THREE.MathUtils.damp(interiorGlow.current.opacity, 0.12, 3, delta);
+        interiorGlow.current.opacity = THREE.MathUtils.damp(interiorGlow.current.opacity, 0.32, 3, delta);
     }
   });
 
@@ -835,7 +1119,8 @@ export default function FacadeScene({
     return Array.from({ length: COLUMN_COUNT }, (_, i) => -span / 2 + (span / (COLUMN_COUNT - 1)) * i);
   }, []);
 
-  const doorY = PODIUM_HEIGHT + 3.3;
+  const doorSillY = PODIUM_HEIGHT;
+  const stairWidth = TEMPLE_WIDTH + 1;
 
   return (
     <>
@@ -877,13 +1162,46 @@ export default function FacadeScene({
       </mesh>
       <ScatterStones />
 
-      {/* Grand escalier sur toute la largeur */}
-      {Array.from({ length: 7 }, (_, i) => (
-        <mesh key={i} position={[0, 0.14 + 0.28 * i, 5.4 - i * 0.62]} castShadow receiveShadow>
-          <boxGeometry args={[TEMPLE_WIDTH + 4.5 - i * 0.3, 0.28, 9.4 + i * 1.24 - i * 2.48]} />
-          <meshStandardMaterial {...marble} bumpScale={0.5} />
-        </mesh>
-      ))}
+      {/* Grand escalier : marches à nez mouluré… */}
+      {Array.from({ length: 7 }, (_, i) => {
+        const depth = 9.4 + i * 1.24 - i * 2.48;
+        return (
+          <group key={i} position={[0, 0.14 + 0.28 * i, 5.4 - i * 0.62]}>
+            <mesh castShadow receiveShadow>
+              <boxGeometry args={[stairWidth, 0.28, depth]} />
+              <meshStandardMaterial {...marble} bumpScale={0.5} />
+            </mesh>
+            {/* Nez de marche saillant qui accroche la lumière */}
+            <mesh position={[0, 0.125, depth / 2 - 0.04]} castShadow>
+              <boxGeometry args={[stairWidth, 0.07, 0.14]} />
+              <meshStandardMaterial {...marble} bumpScale={0.4} color="#e6dfcc" />
+            </mesh>
+          </group>
+        );
+      })}
+      {/* …encadré de murs d'échiffre massifs portant les torchères */}
+      {[-1, 1].map((side) => {
+        const x = side * (stairWidth / 2 + 0.85);
+        return (
+          <group key={side} position={[x, 0, 1.6]}>
+            {/* Corps du mur */}
+            <mesh position={[0, (PODIUM_HEIGHT + 0.26) / 2, 0]} castShadow receiveShadow>
+              <boxGeometry args={[1.7, PODIUM_HEIGHT + 0.26, 9.6]} />
+              <meshStandardMaterial {...antaeWall} bumpScale={0.8} />
+            </mesh>
+            {/* Plinthe et couronnement mouluré */}
+            <mesh position={[0, 0.14, 0]} receiveShadow>
+              <boxGeometry args={[1.94, 0.28, 9.9]} />
+              <meshStandardMaterial {...marble} bumpScale={0.5} />
+            </mesh>
+            <mesh position={[0, PODIUM_HEIGHT + 0.34, 0]} castShadow receiveShadow>
+              <boxGeometry args={[1.96, 0.2, 9.92]} />
+              <meshStandardMaterial {...marble} bumpScale={0.5} />
+            </mesh>
+          </group>
+        );
+      })}
+
       {/* Stylobate */}
       <mesh position={[0, PODIUM_HEIGHT - 0.14, -1.8]} castShadow receiveShadow>
         <boxGeometry args={[TEMPLE_WIDTH + 2.6, 0.28, 9.8]} />
@@ -908,67 +1226,184 @@ export default function FacadeScene({
         <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
 
-      {/* Cella et murs latéraux (antae) */}
-      <mesh position={[0, PODIUM_HEIGHT + (COLUMN_HEIGHT + 1) / 2, -PORCH_DEPTH - 0.4]} receiveShadow>
-        <boxGeometry args={[TEMPLE_WIDTH - 1.4, COLUMN_HEIGHT + 1, 0.9]} />
-        <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
-      </mesh>
+      {/* ——— Mur de cella en grand appareil, percé de la baie ——— */}
       {[-1, 1].map((side) => (
         <mesh
           key={side}
-          position={[side * (TEMPLE_WIDTH / 2 - 0.9), PODIUM_HEIGHT + (COLUMN_HEIGHT + 1) / 2, -PORCH_DEPTH / 2]}
+          position={[
+            side * (BAY_WIDTH / 2 + (CELLA_WALL_WIDTH - BAY_WIDTH) / 4),
+            PODIUM_HEIGHT + CELLA_WALL_HEIGHT / 2,
+            CELLA_Z,
+          ]}
+          receiveShadow
+        >
+          <boxGeometry args={[(CELLA_WALL_WIDTH - BAY_WIDTH) / 2, CELLA_WALL_HEIGHT, 0.9]} />
+          <meshStandardMaterial {...cellaSide} bumpScale={0.8} />
+        </mesh>
+      ))}
+      <mesh
+        position={[0, PODIUM_HEIGHT + BAY_HEIGHT + (CELLA_WALL_HEIGHT - BAY_HEIGHT) / 2, CELLA_Z]}
+        receiveShadow
+      >
+        <boxGeometry args={[BAY_WIDTH, CELLA_WALL_HEIGHT - BAY_HEIGHT, 0.9]} />
+        <meshStandardMaterial {...cellaTop} bumpScale={0.8} />
+      </mesh>
+      {/* Orthostates (soubassement en grands blocs) et bandeau sommital */}
+      <mesh position={[0, PODIUM_HEIGHT + 0.85, CELLA_Z + 0.51]} receiveShadow>
+        <boxGeometry args={[CELLA_WALL_WIDTH, 1.7, 0.12]} />
+        <meshStandardMaterial {...marbleWall} bumpScale={0.7} />
+      </mesh>
+      <mesh position={[0, PODIUM_HEIGHT + CELLA_WALL_HEIGHT - 0.3, CELLA_Z + 0.52]} castShadow receiveShadow>
+        <boxGeometry args={[CELLA_WALL_WIDTH, 0.5, 0.16]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      {/* Pilastres répondant aux colonnes */}
+      {columnXs
+        .filter((x) => Math.abs(x) > 3.4)
+        .map((x) => (
+          <group key={`pilaster-${x}`} position={[x, 0, CELLA_Z + 0.55]}>
+            <mesh position={[0, PODIUM_HEIGHT + 2, 0]} castShadow receiveShadow>
+              <boxGeometry args={[0.72, 0.6, 0.22]} />
+              <meshStandardMaterial {...marble} bumpScale={0.5} />
+            </mesh>
+            <mesh position={[0, PODIUM_HEIGHT + 5.9, 0]} castShadow receiveShadow>
+              <boxGeometry args={[0.56, 7.2, 0.18]} />
+              <meshStandardMaterial {...marble} bumpScale={0.5} />
+            </mesh>
+            <mesh position={[0, PODIUM_HEIGHT + 9.7, 0]} castShadow receiveShadow>
+              <boxGeometry args={[0.74, 0.4, 0.24]} />
+              <meshStandardMaterial {...marble} bumpScale={0.5} />
+            </mesh>
+          </group>
+        ))}
+      {/* Plaques dédicatoires encastrées de part et d'autre de la porte */}
+      {[-1, 1].map((side) => (
+        <group key={`plaque-${side}`} position={[side * 4.7, PODIUM_HEIGHT + 3.6, CELLA_Z + 0.5]}>
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[1.7, 2.3, 0.1]} />
+            <meshStandardMaterial {...marble} bumpScale={0.5} />
+          </mesh>
+          <mesh position={[0, 0, 0.06]}>
+            <planeGeometry args={[1.36, 1.96]} />
+            <meshStandardMaterial color="#39301f" roughness={0.85} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* Antes (murs latéraux du pronaos) */}
+      {[-1, 1].map((side) => (
+        <mesh
+          key={side}
+          position={[side * (TEMPLE_WIDTH / 2 - 0.9), PODIUM_HEIGHT + CELLA_WALL_HEIGHT / 2, -PORCH_DEPTH / 2]}
           castShadow
           receiveShadow
         >
-          <boxGeometry args={[0.8, COLUMN_HEIGHT + 1, PORCH_DEPTH + 1.2]} />
-          <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+          <boxGeometry args={[0.8, CELLA_WALL_HEIGHT, PORCH_DEPTH + 1.2]} />
+          <meshStandardMaterial {...antaeWall} bumpScale={0.8} />
         </mesh>
       ))}
 
-      {/* Encadrement de porte monumental */}
-      <mesh position={[0, doorY, -PORCH_DEPTH + 0.12]} receiveShadow>
-        <boxGeometry args={[5.4, 7.4, 0.3]} />
+      {/* ——— Encadrement monumental de la baie ——— */}
+      {/* Jambages moulurés (deux fasces) */}
+      {[-1, 1].map((side) => (
+        <group key={`jamb-${side}`}>
+          <mesh position={[side * (BAY_WIDTH / 2 + 0.3), doorSillY + 3.55, CELLA_Z + 0.5]} castShadow receiveShadow>
+            <boxGeometry args={[0.6, 7.3, 0.34]} />
+            <meshStandardMaterial {...marble} bumpScale={0.5} />
+          </mesh>
+          <mesh position={[side * (BAY_WIDTH / 2 + 0.08), doorSillY + 3.5, CELLA_Z + 0.58]} castShadow receiveShadow>
+            <boxGeometry args={[0.26, 7.2, 0.22]} />
+            <meshStandardMaterial {...marble} bumpScale={0.5} color="#e2dbc8" />
+          </mesh>
+        </group>
+      ))}
+      {/* Linteau, crossettes et corniche sur consoles */}
+      <mesh position={[0, doorSillY + 7.2, CELLA_Z + 0.5]} castShadow receiveShadow>
+        <boxGeometry args={[BAY_WIDTH + 1.6, 0.6, 0.36]} />
         <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
-      {/* Cœur lumineux du sanctuaire, révélé par l'ouverture des portes */}
-      <mesh position={[0, doorY - 0.2, -PORCH_DEPTH + 0.15]}>
-        <planeGeometry args={[5.2, 7.2]} />
-        <meshBasicMaterial
-          ref={interiorGlow}
-          color="#fff3da"
-          transparent
-          opacity={0}
-          toneMapped={false}
-          depthWrite={false}
-        />
+      {[-1, 1].map((side) => (
+        <mesh key={`crossette-${side}`} position={[side * (BAY_WIDTH / 2 + 0.45), doorSillY + 7.2, CELLA_Z + 0.56]} castShadow>
+          <boxGeometry args={[0.9, 0.6, 0.3]} />
+          <meshStandardMaterial {...marble} bumpScale={0.5} color="#e2dbc8" />
+        </mesh>
+      ))}
+      {[-1, 1].map((side) => (
+        <mesh key={`console-${side}`} position={[side * (BAY_WIDTH / 2 + 0.2), doorSillY + 7.66, CELLA_Z + 0.62]} castShadow>
+          <boxGeometry args={[0.34, 0.44, 0.5]} />
+          <meshStandardMaterial {...marble} bumpScale={0.5} />
+        </mesh>
+      ))}
+      <mesh position={[0, doorSillY + 7.98, CELLA_Z + 0.55]} castShadow receiveShadow>
+        <boxGeometry args={[BAY_WIDTH + 2.3, 0.32, 0.75]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
-      {/* Portes de bronze patiné, articulées sur leurs gonds extérieurs.
-          Entrebâillées au repos, elles s'ouvrent en grand à l'entrée puis
-          se referment au retour du couloir. */}
+      {/* Seuil de marbre usé */}
+      <mesh position={[0, doorSillY + 0.06, CELLA_Z + 0.3]} receiveShadow>
+        <boxGeometry args={[BAY_WIDTH + 0.6, 0.12, 1.4]} />
+        <meshStandardMaterial {...marble} bumpScale={0.4} color="#cfc6b0" />
+      </mesh>
+
+      {/* ——— Vestibule derrière la baie ——— */}
+      <group position={[0, doorSillY, CELLA_Z - VESTIBULE_DEPTH / 2 - 0.45]}>
+        {/* Sol */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} receiveShadow>
+          <planeGeometry args={[5.4, VESTIBULE_DEPTH + 1]} />
+          <meshStandardMaterial {...marble} bumpScale={0.5} color="#c9bfa6" />
+        </mesh>
+        {/* Murs latéraux et plafond, dans la pénombre chaude */}
+        {[-1, 1].map((side) => (
+          <mesh key={side} position={[side * 2.75, 3.6, 0]}>
+            <boxGeometry args={[0.3, 7.3, VESTIBULE_DEPTH + 1]} />
+            <meshStandardMaterial color="#241a10" roughness={0.92} />
+          </mesh>
+        ))}
+        <mesh position={[0, 7.25, 0]}>
+          <boxGeometry args={[5.8, 0.3, VESTIBULE_DEPTH + 1]} />
+          <meshStandardMaterial color="#1c1409" roughness={0.94} />
+        </mesh>
+        {/* Fond opaque… */}
+        <mesh position={[0, 3.6, -VESTIBULE_DEPTH / 2 - 0.4]}>
+          <boxGeometry args={[5.8, 7.4, 0.3]} />
+          <meshStandardMaterial color="#150e07" roughness={0.95} />
+        </mesh>
+        {/* …et cœur lumineux du sanctuaire, qui embrase tout à l'entrée */}
+        <mesh position={[0, 3.45, -VESTIBULE_DEPTH / 2 - 0.22]}>
+          <planeGeometry args={[5.2, 6.7]} />
+          <meshBasicMaterial
+            ref={interiorGlow}
+            color="#fff3da"
+            transparent
+            opacity={0.32}
+            toneMapped={false}
+            depthWrite={false}
+          />
+        </mesh>
+      </group>
+
+      {/* Portes de bronze grandes ouvertes, rabattues vers l'intérieur */}
       <group
-        ref={leftDoor}
-        position={[-2.2, doorY - 0.2, -PORCH_DEPTH + 0.26]}
-        rotation={[0, DOOR_AJAR, 0]}
+        position={[-BAY_WIDTH / 2, doorSillY + LEAF_HEIGHT / 2 + 0.12, CELLA_Z + 0.1]}
+        rotation={[0, DOOR_OPEN_ANGLE, 0]}
       >
         <DoorLeaf side={1} bronze={bronze} />
       </group>
       <group
-        ref={rightDoor}
-        position={[2.2, doorY - 0.2, -PORCH_DEPTH + 0.26]}
-        rotation={[0, -DOOR_AJAR, 0]}
+        position={[BAY_WIDTH / 2, doorSillY + LEAF_HEIGHT / 2 + 0.12, CELLA_Z + 0.1]}
+        rotation={[0, -DOOR_OPEN_ANGLE, 0]}
       >
         <DoorLeaf side={-1} bronze={bronze} />
       </group>
-      {/* Halo chaud émanant de l'entrebâillement */}
-      <sprite scale={[5, 8, 1]} position={[0, doorY - 0.4, -PORCH_DEPTH + 0.7]}>
-        <spriteMaterial map={doorGlow} transparent opacity={0.34} depthWrite={false} blending={THREE.AdditiveBlending} />
+      {/* Halo chaud débordant de la baie ouverte */}
+      <sprite scale={[5.4, 8.2, 1]} position={[0, doorSillY + 3.2, CELLA_Z + 1]}>
+        <spriteMaterial map={doorGlow} transparent opacity={0.32} depthWrite={false} blending={THREE.AdditiveBlending} />
       </sprite>
       <pointLight
         ref={interiorLight}
-        position={[0, doorY - 0.4, -PORCH_DEPTH + 1.6]}
+        position={[0, doorSillY + 3, CELLA_Z - 1.6]}
         color="#ffce8a"
-        intensity={20}
-        distance={18}
+        intensity={30}
+        distance={20}
         decay={2}
       />
 
@@ -987,37 +1422,37 @@ export default function FacadeScene({
         <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
 
-      {/* Inscription monumentale */}
-      <Html
-        transform
-        position={[0, ENTAB_Y + 0.93, 1.28]}
-        scale={0.6}
-        style={{ pointerEvents: "none", userSelect: "none" }}
-      >
-        <div
-          style={{
-            fontFamily: "var(--font-display), Georgia, serif",
-            letterSpacing: "0.52em",
-            fontWeight: 700,
-            fontSize: "30px",
-            color: "#9a7a45",
-            textShadow: "0 1px 0 rgba(255,240,200,0.3), 0 -2px 2px rgba(0,0,0,0.65)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          HERKVL·MVSEVM
-        </div>
-      </Html>
+      {/* Inscription gravée dans la frise — dans la scène WebGL : elle vit
+          et meurt avec le temple, plus d'apparition fantôme dans le blanc */}
+      <mesh position={[0, ENTAB_Y + 0.93, 1.27]}>
+        <planeGeometry args={[8.6, 1.075]} />
+        <meshBasicMaterial map={inscription} transparent depthWrite={false} toneMapped={false} />
+      </mesh>
 
       <Pediment marble={marble} />
+      <PedimentLight />
 
       {/* Éclairage rasant de la colonnade */}
       <Uplight x={-7.4} />
       <Uplight x={7.4} />
 
-      {/* Torchères : paire au pied de l'escalier, paire le long de l'allée */}
-      <Torch x={-TEMPLE_WIDTH / 2 - 3.4} z={7} flame={flame} stone={marbleWall} />
-      <Torch x={TEMPLE_WIDTH / 2 + 3.4} z={7} flame={flame} stone={marbleWall} />
+      {/* Torchères : sur les murs d'échiffre, et le long de l'allée */}
+      <Torch
+        x={-(stairWidth / 2 + 0.85)}
+        y={PODIUM_HEIGHT + 0.44}
+        z={5.6}
+        scale={0.92}
+        flame={flame}
+        stone={marbleWall}
+      />
+      <Torch
+        x={stairWidth / 2 + 0.85}
+        y={PODIUM_HEIGHT + 0.44}
+        z={5.6}
+        scale={0.92}
+        flame={flame}
+        stone={marbleWall}
+      />
       <Torch x={-6.2} z={17.5} scale={0.85} flame={flame} stone={marbleWall} />
       <Torch x={6.2} z={17.5} scale={0.85} flame={flame} stone={marbleWall} />
 
@@ -1033,8 +1468,6 @@ export default function FacadeScene({
       {columnXs.map((x) => (
         <Blob key={`blob-${x}`} x={x} z={0} y={PODIUM_HEIGHT + 0.01} radius={1.15} opacity={0.42} texture={blob} />
       ))}
-      <Blob x={-TEMPLE_WIDTH / 2 - 3.4} z={7} radius={1} opacity={0.42} texture={blob} />
-      <Blob x={TEMPLE_WIDTH / 2 + 3.4} z={7} radius={1} opacity={0.42} texture={blob} />
       <Blob x={-6.2} z={17.5} radius={0.85} opacity={0.4} texture={blob} />
       <Blob x={6.2} z={17.5} radius={0.85} opacity={0.4} texture={blob} />
       {CYPRESSES.map(([x, z, height]) => (
