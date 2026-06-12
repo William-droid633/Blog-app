@@ -12,7 +12,7 @@ import {
   fluteTexture,
   starPositions,
   skyGradientTexture,
-  cloudTexture,
+  galaxyTexture,
   shadowBlobTexture,
   setRepeat,
   type SurfaceMaps,
@@ -63,34 +63,37 @@ function SkyDome() {
   );
 }
 
-/** Voiles de nuages éclairés par la lune, en lente dérive. */
-function Clouds() {
-  const texture = useMemo(() => cloudTexture(), []);
-  const group = useRef<THREE.Group>(null);
+/**
+ * Voie lactée : large bande de poussière d'étoiles et de nébuleuses
+ * tendue en travers du ciel, en très lente rotation pour la donner
+ * vivante. Une seule surface texturée additive — coût négligeable.
+ */
+function Galaxy() {
+  const texture = useMemo(() => galaxyTexture(), []);
+  const main = useRef<THREE.Mesh>(null);
+  const core = useMemo(() => new THREE.CanvasTexture(glowCanvas("rgba(255, 244, 222, 0.9)")), []);
 
   useFrame(({ clock }) => {
-    if (!group.current) return;
-    group.current.children.forEach((child, i) => {
-      child.position.x += 0.004 + i * 0.0015;
-      if (child.position.x > 90) child.position.x = -90;
-    });
+    if (main.current) main.current.rotation.z = -0.3 + Math.sin(clock.elapsedTime * 0.01) * 0.015;
   });
 
-  const layers: Array<{ position: [number, number, number]; scale: [number, number, number]; opacity: number }> = [
-    { position: [-30, 30, -78], scale: [85, 26, 1], opacity: 0.32 },
-    { position: [25, 40, -92], scale: [95, 30, 1], opacity: 0.24 },
-    { position: [-55, 22, -64], scale: [60, 18, 1], opacity: 0.28 },
-    { position: [50, 26, -70], scale: [70, 20, 1], opacity: 0.22 },
-    { position: [0, 48, -100], scale: [110, 34, 1], opacity: 0.18 },
-  ];
-
   return (
-    <group ref={group}>
-      {layers.map((layer, i) => (
-        <sprite key={i} position={layer.position} scale={layer.scale}>
-          <spriteMaterial map={texture} transparent opacity={layer.opacity} depthWrite={false} fog={false} />
-        </sprite>
-      ))}
+    <group position={[-18, 52, -108]} rotation={[0.15, 0, 0]}>
+      <mesh ref={main} renderOrder={-1}>
+        <planeGeometry args={[230, 150]} />
+        <meshBasicMaterial
+          map={texture}
+          transparent
+          opacity={0.95}
+          depthWrite={false}
+          fog={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      {/* Halo du cœur galactique */}
+      <sprite scale={[60, 34, 1]} position={[6, -4, 1]}>
+        <spriteMaterial map={core} transparent opacity={0.4} depthWrite={false} fog={false} blending={THREE.AdditiveBlending} />
+      </sprite>
     </group>
   );
 }
@@ -119,32 +122,24 @@ function Blob({
   );
 }
 
+/** Champ d'étoiles sur deux strates (proches plus vives, lointaines ténues). */
 function Stars() {
-  const positions = useMemo(() => starPositions(1800, 110), []);
+  const near = useMemo(() => starPositions(1100, 96), []);
+  const far = useMemo(() => starPositions(1700, 122), []);
   return (
-    <points>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.2} color="#e9e4d4" transparent opacity={0.85} sizeAttenuation depthWrite={false} />
-    </points>
-  );
-}
-
-function Moon() {
-  const texture = useMemo(() => {
-    const t = new THREE.CanvasTexture(glowCanvas("rgba(214, 226, 248, 0.9)"));
-    return t;
-  }, []);
-  return (
-    <group position={[-34, 40, -52]}>
-      <mesh>
-        <circleGeometry args={[3.2, 40]} />
-        <meshBasicMaterial color="#e6edf8" fog={false} />
-      </mesh>
-      <sprite scale={[16, 16, 1]}>
-        <spriteMaterial map={texture} transparent opacity={0.55} depthWrite={false} />
-      </sprite>
+    <group>
+      <points>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[near, 3]} />
+        </bufferGeometry>
+        <pointsMaterial size={0.32} color="#f4eede" transparent opacity={0.9} sizeAttenuation depthWrite={false} />
+      </points>
+      <points>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[far, 3]} />
+        </bufferGeometry>
+        <pointsMaterial size={0.16} color="#aab8d6" transparent opacity={0.6} sizeAttenuation depthWrite={false} />
+      </points>
     </group>
   );
 }
@@ -192,62 +187,164 @@ function Column({
   );
 }
 
+/** Palmette de bronze (acrotère) : éventail de feuilles sur une volute. */
+function Palmette({ scale = 1 }: { scale?: number }) {
+  const petals = 9;
+  const bronze = { color: "#9a7a45", metalness: 0.55, roughness: 0.42 };
+  return (
+    <group scale={scale}>
+      {Array.from({ length: petals }).map((_, i) => {
+        const a = -0.8 + (i / (petals - 1)) * 1.6;
+        const len = 0.62 - Math.abs(i - (petals - 1) / 2) * 0.05;
+        return (
+          <group key={i} rotation={[0, 0, -a]}>
+            <mesh position={[0, len / 2, 0]} castShadow>
+              <coneGeometry args={[0.05, len, 6]} />
+              <meshStandardMaterial {...bronze} />
+            </mesh>
+          </group>
+        );
+      })}
+      <mesh position={[0, 0.04, 0.02]}>
+        <sphereGeometry args={[0.14, 12, 8]} />
+        <meshStandardMaterial color="#7a5a2e" metalness={0.6} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Rosette / patère de bronze (semis de pétales autour d'un cœur bombé). */
+function Rosette({ r = 0.4 }: { r?: number }) {
+  const petals = 8;
+  return (
+    <group>
+      <mesh>
+        <circleGeometry args={[r, 28]} />
+        <meshStandardMaterial color="#6d4f24" metalness={0.7} roughness={0.42} />
+      </mesh>
+      {Array.from({ length: petals }).map((_, i) => {
+        const a = (i / petals) * Math.PI * 2;
+        return (
+          <mesh key={i} position={[Math.cos(a) * r * 0.58, Math.sin(a) * r * 0.58, 0.03]}>
+            <sphereGeometry args={[r * 0.24, 8, 6]} />
+            <meshStandardMaterial color="#9a7a45" metalness={0.6} roughness={0.4} />
+          </mesh>
+        );
+      })}
+      <mesh position={[0, 0, 0.06]}>
+        <sphereGeometry args={[r * 0.3, 12, 8]} />
+        <meshStandardMaterial color="#b8924f" metalness={0.72} roughness={0.33} />
+      </mesh>
+    </group>
+  );
+}
+
 function Pediment({ marble }: { marble: SurfaceMaps }) {
+  const half = TEMPLE_WIDTH / 2 + 0.6;
   const geometry = useMemo(() => {
     const shape = new THREE.Shape();
-    shape.moveTo(-TEMPLE_WIDTH / 2 - 0.6, 0);
-    shape.lineTo(TEMPLE_WIDTH / 2 + 0.6, 0);
+    shape.moveTo(-half, 0);
+    shape.lineTo(half, 0);
     shape.lineTo(0, PEDIMENT_HEIGHT);
     shape.closePath();
     return new THREE.ExtrudeGeometry(shape, { depth: 2, bevelEnabled: false });
-  }, []);
+  }, [half]);
+
+  // Champ assombri du tympan, encadré par les corniches
+  const fieldGeometry = useMemo(() => {
+    const bw = half - 1.1;
+    const top = PEDIMENT_HEIGHT - 0.62;
+    const shape = new THREE.Shape();
+    shape.moveTo(-bw, 0.26);
+    shape.lineTo(bw, 0.26);
+    shape.lineTo(0, top);
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
+  }, [half]);
 
   const y = ENTAB_Y + ENTABLATURE_HEIGHT;
-  const slopeAngle = Math.atan2(PEDIMENT_HEIGHT, TEMPLE_WIDTH / 2 + 0.6);
-  const slopeLength = Math.hypot(PEDIMENT_HEIGHT, TEMPLE_WIDTH / 2 + 0.6) + 0.6;
+  const slopeAngle = Math.atan2(PEDIMENT_HEIGHT, half);
+  const slopeLength = Math.hypot(PEDIMENT_HEIGHT, half) + 0.6;
+  const wreathLeaves = 18;
 
   return (
     <group position={[0, y, -1]}>
       <mesh geometry={geometry} castShadow receiveShadow>
         <meshStandardMaterial {...marble} bumpScale={0.6} />
       </mesh>
-      {/* Corniches rampantes */}
-      <mesh
-        position={[-(TEMPLE_WIDTH / 4 + 0.15), PEDIMENT_HEIGHT / 2 + 0.18, 1.06]}
-        rotation={[0, 0, slopeAngle]}
-        castShadow
-      >
-        <boxGeometry args={[slopeLength, 0.34, 2.4]} />
+
+      {/* Champ du tympan, légèrement en avant et assombri */}
+      <mesh geometry={fieldGeometry} position={[0, 0, 1.02]}>
+        <meshStandardMaterial color="#b3a98e" roughness={0.86} />
+      </mesh>
+
+      {/* Geison horizontal (corniche de base saillante) */}
+      <mesh position={[0, -0.04, 1.18]} castShadow>
+        <boxGeometry args={[TEMPLE_WIDTH + 1.6, 0.32, 0.46]} />
         <meshStandardMaterial {...marble} bumpScale={0.6} />
       </mesh>
-      <mesh
-        position={[TEMPLE_WIDTH / 4 + 0.15, PEDIMENT_HEIGHT / 2 + 0.18, 1.06]}
-        rotation={[0, 0, -slopeAngle]}
-        castShadow
-      >
-        <boxGeometry args={[slopeLength, 0.34, 2.4]} />
-        <meshStandardMaterial {...marble} bumpScale={0.6} />
-      </mesh>
-      {/* Relief du tympan : couronne de laurier en bronze */}
-      <group position={[0, PEDIMENT_HEIGHT * 0.36, 2.04]}>
-        <mesh>
-          <torusGeometry args={[0.95, 0.13, 12, 40]} />
-          <meshStandardMaterial color="#6d4f24" metalness={0.85} roughness={0.4} />
-        </mesh>
-        <mesh>
-          <circleGeometry args={[0.4, 24]} />
-          <meshStandardMaterial color="#56401f" metalness={0.8} roughness={0.45} />
-        </mesh>
-      </group>
-      {/* Acrotères */}
-      {[[-TEMPLE_WIDTH / 2 - 0.4, 0.34], [0, PEDIMENT_HEIGHT + 0.32], [TEMPLE_WIDTH / 2 + 0.4, 0.34]].map(
-        ([x, ay], i) => (
-          <mesh key={i} position={[x, ay, 1]} castShadow>
-            <sphereGeometry args={[0.34, 14, 10]} />
+      {/* Corniches rampantes à listel */}
+      {[-1, 1].map((s) => (
+        <group key={s}>
+          <mesh
+            position={[s * (TEMPLE_WIDTH / 4 + 0.15), PEDIMENT_HEIGHT / 2 + 0.18, 1.08]}
+            rotation={[0, 0, s * slopeAngle]}
+            castShadow
+          >
+            <boxGeometry args={[slopeLength, 0.36, 2.5]} />
             <meshStandardMaterial {...marble} bumpScale={0.6} />
           </mesh>
-        )
-      )}
+        </group>
+      ))}
+
+      {/* Couronne de laurier centrale, en bronze, avec rubans */}
+      <group position={[0, PEDIMENT_HEIGHT * 0.42, 1.24]}>
+        <mesh>
+          <torusGeometry args={[0.92, 0.1, 12, 44]} />
+          <meshStandardMaterial color="#6d4f24" metalness={0.85} roughness={0.4} />
+        </mesh>
+        {Array.from({ length: wreathLeaves }).map((_, i) => {
+          const a = (i / wreathLeaves) * Math.PI * 2;
+          return (
+            <mesh
+              key={i}
+              position={[Math.cos(a) * 0.92, Math.sin(a) * 0.92, 0]}
+              rotation={[Math.PI / 2, 0, -a + Math.PI / 2]}
+            >
+              <coneGeometry args={[0.075, 0.34, 5]} />
+              <meshStandardMaterial color="#7c5a2c" metalness={0.78} roughness={0.42} />
+            </mesh>
+          );
+        })}
+        <mesh position={[0, 0, 0.04]}>
+          <circleGeometry args={[0.34, 24]} />
+          <meshStandardMaterial color="#8a6530" metalness={0.82} roughness={0.36} />
+        </mesh>
+        {/* Rubans */}
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 0.26, -1.02, 0]} rotation={[0, 0, s * 0.32]} castShadow>
+            <boxGeometry args={[0.11, 0.72, 0.05]} />
+            <meshStandardMaterial color="#7a5a2e" metalness={0.6} roughness={0.45} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Rosettes flanquantes */}
+      {[-1, 1].map((s) => (
+        <group key={s} position={[s * (half * 0.46), PEDIMENT_HEIGHT * 0.24, 1.2]}>
+          <Rosette r={0.42} />
+        </group>
+      ))}
+
+      {/* Acrotères : palmettes de bronze (sommet + angles) */}
+      <group position={[0, PEDIMENT_HEIGHT + 0.18, 1]}>
+        <Palmette scale={1.15} />
+      </group>
+      {[-1, 1].map((s) => (
+        <group key={s} position={[s * half, 0.06, 1]} rotation={[0, 0, s * 0.18]}>
+          <Palmette scale={0.78} />
+        </group>
+      ))}
     </group>
   );
 }
@@ -303,22 +400,117 @@ function Torch({ x, z }: { x: number; z: number }) {
   );
 }
 
+/**
+ * Cyprès : silhouette fuselée bâtie de plusieurs touffes coniques
+ * superposées, légèrement décalées et bicolores, sur un tronc apparent.
+ * Chaque arbre reçoit une graine déterministe (sa position) pour varier
+ * forme et inclinaison sans aléatoire à chaque frame.
+ */
 function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
+  const layers = useMemo(() => {
+    let s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
+    const rnd = () => {
+      s = Math.sin(s + 1) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    const baseR = height * 0.13;
+    const tufts = 8;
+    const arr: Array<{ y: number; r: number; h: number; dx: number; dz: number; dark: boolean }> = [];
+    for (let i = 0; i < tufts; i++) {
+      const t = i / (tufts - 1);
+      arr.push({
+        y: height * (0.16 + t * 0.78),
+        r: baseR * (1 - t * 0.82) * (0.82 + rnd() * 0.34),
+        h: height * 0.24 * (1 - t * 0.35),
+        dx: (rnd() - 0.5) * baseR * 0.5,
+        dz: (rnd() - 0.5) * baseR * 0.5,
+        dark: rnd() > 0.5,
+      });
+    }
+    return { arr, lean: (rnd() - 0.5) * 0.07, spin: rnd() * Math.PI };
+  }, [x, z, height]);
+
   return (
-    <group position={[x, 0, z]}>
-      <mesh position={[0, height / 2, 0]} castShadow>
-        <coneGeometry args={[height * 0.14, height, 8]} />
-        <meshStandardMaterial color="#0e1a10" roughness={0.95} />
+    <group position={[x, 0, z]} rotation={[0, layers.spin, layers.lean]}>
+      {/* Tronc */}
+      <mesh position={[0, height * 0.1, 0]} castShadow>
+        <cylinderGeometry args={[height * 0.016, height * 0.032, height * 0.22, 6]} />
+        <meshStandardMaterial color="#3a2b1c" roughness={0.92} />
+      </mesh>
+      {layers.arr.map((l, i) => (
+        <mesh key={i} position={[l.dx, l.y, l.dz]} castShadow>
+          <coneGeometry args={[l.r, l.h, 7]} />
+          <meshStandardMaterial color={l.dark ? "#0e2113" : "#17311d"} roughness={0.95} />
+        </mesh>
+      ))}
+      {/* Pointe effilée */}
+      <mesh position={[0, height * 0.99, 0]} castShadow>
+        <coneGeometry args={[height * 0.022, height * 0.13, 6]} />
+        <meshStandardMaterial color="#17311d" roughness={0.95} />
       </mesh>
     </group>
   );
 }
 
 /**
+ * Battant de bronze ouvragé : double panneau en relief, anneau de tirage
+ * et astragale au bord de jonction. `side` = +1 (battant gauche) ou -1
+ * (battant droit), les coordonnées étant exprimées dans le repère du
+ * groupe articulé sur le gond.
+ */
+function DoorLeaf({ side, bronze }: { side: 1 | -1; bronze: SurfaceMaps }) {
+  const cx = side * 1.05;
+  const innerX = cx + side * 0.86;
+  return (
+    <>
+      <mesh position={[cx, 0, 0]} castShadow>
+        <boxGeometry args={[2.1, 6.6, 0.16]} />
+        <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
+      </mesh>
+      {/* Deux panneaux à cadre saillant et fond recreusé */}
+      {[1.5, -1.5].map((py) => (
+        <group key={py} position={[cx, py, 0]}>
+          <mesh position={[0, 0, 0.05]} castShadow>
+            <boxGeometry args={[1.52, 2.3, 0.06]} />
+            <meshStandardMaterial color="#7a5829" metalness={0.8} roughness={0.34} />
+          </mesh>
+          <mesh position={[0, 0, 0.08]}>
+            <boxGeometry args={[1.16, 1.94, 0.04]} />
+            <meshStandardMaterial {...bronze} bumpScale={0.6} metalness={0.7} />
+          </mesh>
+          {/* Bossette centrale */}
+          <mesh position={[0, 0, 0.12]}>
+            <sphereGeometry args={[0.12, 12, 8]} />
+            <meshStandardMaterial color="#9a7338" metalness={0.88} roughness={0.3} />
+          </mesh>
+        </group>
+      ))}
+      {/* Astragale au bord de jonction */}
+      <mesh position={[innerX, 0, 0.07]} castShadow>
+        <boxGeometry args={[0.12, 6.5, 0.1]} />
+        <meshStandardMaterial color="#7a5829" metalness={0.82} roughness={0.32} />
+      </mesh>
+      {/* Anneau de tirage */}
+      <group position={[innerX - side * 0.28, 0.5, 0.12]}>
+        <mesh>
+          <torusGeometry args={[0.22, 0.05, 10, 24]} />
+          <meshStandardMaterial color="#9a7338" metalness={0.9} roughness={0.3} />
+        </mesh>
+        <mesh position={[0, 0.24, 0]}>
+          <sphereGeometry args={[0.1, 12, 8]} />
+          <meshStandardMaterial color="#9a7338" metalness={0.9} roughness={0.3} />
+        </mesh>
+      </group>
+    </>
+  );
+}
+
+/**
  * Façade monumentale du temple, de nuit : huit colonnes cannelées sur
- * podium à grand escalier, entablement denticulé, fronton à acrotères,
- * portes de bronze patiné entrouvertes, torches, lune, cyprès et
- * vestiges épars. Ombres portées réelles par clair de lune.
+ * podium à grand escalier, entablement denticulé, fronton à acrotères et
+ * palmettes, grandes portes de bronze ouvragées, torches, voie lactée,
+ * cyprès et vestiges épars. Ombres portées réelles par la lumière
+ * sidérale.
  */
 export default function FacadeScene({
   entering,
@@ -389,9 +581,12 @@ export default function FacadeScene({
       if (leftDoor.current) leftDoor.current.rotation.y = open;
       if (rightDoor.current) rightDoor.current.rotation.y = -open;
 
-      // La lumière du sanctuaire enfle jusqu'à emplir tout l'écran.
-      if (interiorLight.current) interiorLight.current.intensity = 20 + e * 170;
-      if (interiorGlow.current) interiorGlow.current.opacity = Math.min(1, e * 1.2);
+      // La lumière du sanctuaire n'enfle que sur la fin de l'approche : on
+      // voit d'abord nettement les portes s'ouvrir, puis le blanc nous gagne
+      // une fois le seuil franchi.
+      const glow = THREE.MathUtils.clamp((e - 0.45) / 0.5, 0, 1);
+      if (interiorLight.current) interiorLight.current.intensity = 20 + glow * 180;
+      if (interiorGlow.current) interiorGlow.current.opacity = glow;
     } else {
       enterStart.current = null;
       // Regard levé vers le fronton : sentiment de monumentalité
@@ -422,10 +617,10 @@ export default function FacadeScene({
 
   return (
     <>
-      <color attach="background" args={["#0a0d16"]} />
-      <fog attach="fog" args={["#141320", 30, 110]} />
+      <color attach="background" args={["#05070f"]} />
+      <fog attach="fog" args={["#0c0b16", 32, 115]} />
       <SkyDome />
-      <Clouds />
+      <Galaxy />
 
       {/* Réflexions d'environnement nocturne (procédural, sans réseau) */}
       <Environment resolution={64} frames={1}>
@@ -435,7 +630,7 @@ export default function FacadeScene({
       </Environment>
 
       <ambientLight intensity={0.14} />
-      {/* Clair de lune : la source d'ombres */}
+      {/* Lumière sidérale : la source d'ombres */}
       <directionalLight
         castShadow={highQuality}
         position={[-22, 34, 18]}
@@ -451,7 +646,6 @@ export default function FacadeScene({
         shadow-bias={-0.0004}
       />
       <Stars />
-      <Moon />
 
       {/* Esplanade dallée */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 8]} receiveShadow>
@@ -532,32 +726,14 @@ export default function FacadeScene({
         position={[-2.2, doorY - 0.2, -PORCH_DEPTH + 0.26]}
         rotation={[0, DOOR_AJAR, 0]}
       >
-        <mesh position={[1.05, 0, 0]} castShadow>
-          <boxGeometry args={[2.1, 6.6, 0.16]} />
-          <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
-        </mesh>
-        {[0, 1, 2, 3].map((row) => (
-          <mesh key={row} position={[1.05, -2.2 + row * 1.5, 0.1]}>
-            <sphereGeometry args={[0.07, 10, 8]} />
-            <meshStandardMaterial color="#8a6530" metalness={0.9} roughness={0.3} />
-          </mesh>
-        ))}
+        <DoorLeaf side={1} bronze={bronze} />
       </group>
       <group
         ref={rightDoor}
         position={[2.2, doorY - 0.2, -PORCH_DEPTH + 0.26]}
         rotation={[0, -DOOR_AJAR, 0]}
       >
-        <mesh position={[-1.05, 0, 0]} castShadow>
-          <boxGeometry args={[2.1, 6.6, 0.16]} />
-          <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
-        </mesh>
-        {[0, 1, 2, 3].map((row) => (
-          <mesh key={row} position={[-1.05, -2.2 + row * 1.5, 0.1]}>
-            <sphereGeometry args={[0.07, 10, 8]} />
-            <meshStandardMaterial color="#8a6530" metalness={0.9} roughness={0.3} />
-          </mesh>
-        ))}
+        <DoorLeaf side={-1} bronze={bronze} />
       </group>
       {/* Halo chaud émanant de l'entrebâillement */}
       <sprite scale={[5, 8, 1]} position={[0, doorY - 0.4, -PORCH_DEPTH + 0.7]}>

@@ -125,6 +125,28 @@ function CameraRig({
   return null;
 }
 
+/**
+ * Lueur d'entrée : à l'apparition du couloir (juste après avoir franchi
+ * les portes dans la lumière), un éclat chaud emplit le seuil puis décroît
+ * en ~1,3 s. On émerge ainsi du blanc dans un hall lumineux qui se pose en
+ * douceur — la transition reste fluide, sans aplat délavé sur le noir.
+ */
+function EntranceFlare() {
+  const light = useRef<THREE.PointLight>(null);
+  const start = useRef<number | null>(null);
+
+  useFrame(({ clock, camera }) => {
+    if (start.current === null) start.current = clock.elapsedTime;
+    const k = Math.max(0, 1 - (clock.elapsedTime - start.current) / 1.3);
+    if (light.current) {
+      light.current.position.set(0, EYE_HEIGHT + 0.6, camera.position.z - 1.6);
+      light.current.intensity = k * k * 240;
+    }
+  });
+
+  return <pointLight ref={light} color="#fff1d8" intensity={240} distance={28} decay={2} />;
+}
+
 /** Lumières chaudes qui accompagnent le visiteur. */
 function FollowLights() {
   const ahead = useRef<THREE.PointLight>(null);
@@ -456,6 +478,7 @@ export default function CorridorScene({
       <ambientLight intensity={0.3} />
       <hemisphereLight args={["#e8cd9c", "#16110b", 0.3]} />
       <FollowLights />
+      <EntranceFlare />
       {highQuality && <ShadowSpot />}
 
       <CameraRig travelZ={travelZ} focus={focus} placements={placements} />

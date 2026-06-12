@@ -359,13 +359,19 @@ export default function Museum3D({
         </p>
       </div>
 
-      {/* Éclat doré : traversée des portes et des toiles. La montée est
-          rapide pour atteindre le blanc complet pile au changement de scène,
-          la descente plus douce pour révéler le couloir en fondu. */}
+      {/* Éclat de lumière : traversée des portes et des toiles. Blanc chaud
+          (et non crème) pour prolonger la lumière du sanctuaire. Montée
+          rapide → blanc complet pile au changement de scène ; descente plus
+          douce, le couloir se révélant déjà baigné de lumière (cf. la lueur
+          d'entrée), sans aplat délavé. */}
       <div
-        className={`pointer-events-none absolute inset-0 bg-parchment transition-opacity ${
-          flash ? "opacity-100 duration-500" : "opacity-0 duration-700"
+        className={`pointer-events-none absolute inset-0 transition-opacity ${
+          flash ? "opacity-100 duration-500" : "opacity-0 duration-[800ms]"
         }`}
+        style={{
+          background:
+            "radial-gradient(120% 120% at 50% 45%, #fffaf0 0%, #fdf3e0 55%, #f7ead1 100%)",
+        }}
       />
     </div>
   );
