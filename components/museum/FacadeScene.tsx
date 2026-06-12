@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html, Instances, Instance, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
@@ -11,6 +11,9 @@ import {
   esplanadeSurface,
   fluteTexture,
   starPositions,
+  skyGradientTexture,
+  cloudTexture,
+  shadowBlobTexture,
   setRepeat,
   type SurfaceMaps,
 } from "./textures";
@@ -37,6 +40,73 @@ function glowCanvas(color: string): HTMLCanvasElement {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 128, 128);
   return canvas;
+}
+
+/** Dôme céleste : dégradé atmosphérique du zénith à l'horizon. */
+function SkyDome() {
+  const texture = useMemo(() => skyGradientTexture(), []);
+  return (
+    <mesh renderOrder={-2}>
+      <sphereGeometry args={[130, 24, 18]} />
+      <meshBasicMaterial map={texture} side={THREE.BackSide} fog={false} depthWrite={false} />
+    </mesh>
+  );
+}
+
+/** Voiles de nuages éclairés par la lune, en lente dérive. */
+function Clouds() {
+  const texture = useMemo(() => cloudTexture(), []);
+  const group = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    if (!group.current) return;
+    group.current.children.forEach((child, i) => {
+      child.position.x += 0.004 + i * 0.0015;
+      if (child.position.x > 90) child.position.x = -90;
+    });
+  });
+
+  const layers: Array<{ position: [number, number, number]; scale: [number, number, number]; opacity: number }> = [
+    { position: [-30, 30, -78], scale: [85, 26, 1], opacity: 0.32 },
+    { position: [25, 40, -92], scale: [95, 30, 1], opacity: 0.24 },
+    { position: [-55, 22, -64], scale: [60, 18, 1], opacity: 0.28 },
+    { position: [50, 26, -70], scale: [70, 20, 1], opacity: 0.22 },
+    { position: [0, 48, -100], scale: [110, 34, 1], opacity: 0.18 },
+  ];
+
+  return (
+    <group ref={group}>
+      {layers.map((layer, i) => (
+        <sprite key={i} position={layer.position} scale={layer.scale}>
+          <spriteMaterial map={texture} transparent opacity={layer.opacity} depthWrite={false} fog={false} />
+        </sprite>
+      ))}
+    </group>
+  );
+}
+
+/** Ombre de contact douce posée au sol sous un objet. */
+function Blob({
+  x,
+  z,
+  y = 0.012,
+  radius,
+  opacity = 0.5,
+  texture,
+}: {
+  x: number;
+  z: number;
+  y?: number;
+  radius: number;
+  opacity?: number;
+  texture: THREE.Texture;
+}) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, y, z]}>
+      <planeGeometry args={[radius * 2, radius * 2]} />
+      <meshBasicMaterial map={texture} transparent opacity={opacity} depthWrite={false} />
+    </mesh>
+  );
 }
 
 function Stars() {
@@ -213,7 +283,7 @@ function Torch({ x, z }: { x: number; z: number }) {
       </mesh>
       <mesh ref={flame} position={[0, 0.16, 0]}>
         <coneGeometry args={[0.18, 0.6, 10]} />
-        <meshBasicMaterial color="#ffb347" transparent opacity={0.92} />
+        <meshBasicMaterial color="#ffb347" transparent opacity={0.92} toneMapped={false} />
       </mesh>
       <sprite scale={[1.6, 1.6, 1]} position={[0, 0.2, 0]}>
         <spriteMaterial map={halo} transparent opacity={0.5} depthWrite={false} blending={THREE.AdditiveBlending} />
@@ -259,6 +329,13 @@ export default function FacadeScene({
     return t;
   }, []);
   const doorGlow = useMemo(() => new THREE.CanvasTexture(glowCanvas("rgba(255, 206, 138, 0.9)")), []);
+  const blob = useMemo(() => shadowBlobTexture(), []);
+
+  // Position d'arrivée (premier chargement ou retour depuis le couloir)
+  useEffect(() => {
+    camera.position.set(0, 2.1, 25);
+    camera.lookAt(0, 10.4, 0);
+  }, [camera]);
 
   useFrame(({ pointer, clock }, delta) => {
     if (entering) {
@@ -267,11 +344,12 @@ export default function FacadeScene({
       camera.position.z = THREE.MathUtils.damp(camera.position.z, 0.6, 1.5, delta);
       camera.lookAt(0, PODIUM_HEIGHT + 3, -8);
     } else {
+      // Regard levé vers le fronton : sentiment de monumentalité
       const breathe = Math.sin(clock.elapsedTime * 0.4) * 0.1;
       camera.position.x = THREE.MathUtils.damp(camera.position.x, pointer.x * 1.8, 1.4, delta);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, 2.1 + breathe + pointer.y * 0.6, 1.4, delta);
+      camera.position.y = THREE.MathUtils.damp(camera.position.y, 2 + breathe + pointer.y * 0.6, 1.4, delta);
       camera.position.z = THREE.MathUtils.damp(camera.position.z, 25, 1.2, delta);
-      camera.lookAt(0, 9.2, 0);
+      camera.lookAt(0, 10.4 + pointer.y * 1.2, 0);
     }
   });
 
@@ -284,8 +362,10 @@ export default function FacadeScene({
 
   return (
     <>
-      <color attach="background" args={["#060708"]} />
-      <fog attach="fog" args={["#060708", 26, 95]} />
+      <color attach="background" args={["#0a0d16"]} />
+      <fog attach="fog" args={["#141320", 30, 110]} />
+      <SkyDome />
+      <Clouds />
 
       {/* Réflexions d'environnement nocturne (procédural, sans réseau) */}
       <Environment resolution={64} frames={1}>
@@ -457,6 +537,19 @@ export default function FacadeScene({
         <boxGeometry args={[1.5, 0.7, 1.1]} />
         <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
       </mesh>
+
+      {/* Ombres de contact au sol */}
+      {columnXs.map((x) => (
+        <Blob key={`blob-${x}`} x={x} z={0} y={PODIUM_HEIGHT + 0.01} radius={1.15} opacity={0.42} texture={blob} />
+      ))}
+      <Blob x={-TEMPLE_WIDTH / 2 - 2.2} z={6.2} radius={0.9} opacity={0.4} texture={blob} />
+      <Blob x={TEMPLE_WIDTH / 2 + 2.2} z={6.2} radius={0.9} opacity={0.4} texture={blob} />
+      <Blob x={12.5} z={12} radius={2} opacity={0.45} texture={blob} />
+      <Blob x={-11.5} z={13.5} radius={1.5} opacity={0.45} texture={blob} />
+      <Blob x={-TEMPLE_WIDTH / 2 - 9} z={-4} radius={2.2} opacity={0.5} texture={blob} />
+      <Blob x={-TEMPLE_WIDTH / 2 - 13} z={4} radius={1.7} opacity={0.5} texture={blob} />
+      <Blob x={TEMPLE_WIDTH / 2 + 10} z={-2} radius={2.4} opacity={0.5} texture={blob} />
+      <Blob x={TEMPLE_WIDTH / 2 + 14} z={6} radius={1.8} opacity={0.5} texture={blob} />
 
       {/* Halo chaud montant du parvis */}
       <pointLight position={[0, 3.5, 12]} color="#e8cd9c" intensity={12} distance={30} decay={2} />

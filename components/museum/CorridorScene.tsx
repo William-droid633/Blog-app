@@ -5,7 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Html, Instances, Instance, MeshReflectorMaterial, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import type { Post } from "@/lib/types";
-import Painting, { ART_Y, type PaintingPlacement } from "./Painting";
+import Painting, { ART_Y, ART_WIDTH, ART_HEIGHT, type PaintingPlacement } from "./Painting";
 import {
   travertineSurface,
   floorSurface,
@@ -70,7 +70,8 @@ function CameraRig({
   const targetPos = useRef(new THREE.Vector3(0, EYE_HEIGHT, START_Z));
   const targetLook = useRef(new THREE.Vector3(0, EYE_HEIGHT, START_Z - 10));
 
-  useFrame(({ camera }, delta) => {
+  useFrame((state, delta) => {
+    const camera = state.camera;
     const focused = focus !== null ? placements[focus.index] : null;
 
     if (focused) {
@@ -80,8 +81,16 @@ function CameraRig({
         targetPos.current.set(anchor.x - n.x * 0.5, anchor.y, anchor.z);
         targetLook.current.set(anchor.x - n.x * 3, anchor.y, anchor.z);
       } else {
-        targetPos.current.set(anchor.x + n.x * 2.5, anchor.y - 0.15, anchor.z);
-        targetLook.current.copy(anchor);
+        // Distance adaptée au champ de vision : le cadre ET le cartel
+        // doivent tenir entièrement dans l'écran (mobile compris)
+        const cam = camera as THREE.PerspectiveCamera;
+        const halfV = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+        const halfH = halfV * cam.aspect;
+        const fitWidth = (ART_WIDTH + 1) / 2 / halfH;
+        const fitHeight = (ART_HEIGHT + 2.6) / 2 / halfV;
+        const distance = THREE.MathUtils.clamp(Math.max(fitWidth, fitHeight) * 1.08, 2.4, 6.8);
+        targetPos.current.set(anchor.x + n.x * distance, anchor.y - 0.25, anchor.z);
+        targetLook.current.set(anchor.x, anchor.y - 0.5, anchor.z);
       }
     } else {
       targetPos.current.set(0, EYE_HEIGHT, travelZ.current);
@@ -585,7 +594,7 @@ export default function CorridorScene({
         </group>
         <mesh position={[0, 4, 0]}>
           <coneGeometry args={[0.26, 0.7, 12]} />
-          <meshBasicMaterial color="#ffb347" transparent opacity={0.9} />
+          <meshBasicMaterial color="#ffb347" transparent opacity={0.9} toneMapped={false} />
         </mesh>
         <pointLight position={[0, 3.4, 1]} color="#ff9d45" intensity={20} distance={16} decay={2} />
         <Html transform position={[0, 4.9, 0]} scale={0.55} style={{ pointerEvents: "none", userSelect: "none" }}>

@@ -311,6 +311,61 @@ export function placeholderArtTexture(title: string, size = 512): THREE.CanvasTe
   return toTexture(canvas, true, false);
 }
 
+/** Dégradé atmosphérique du ciel nocturne (zénith → horizon). */
+export function skyGradientTexture(): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(16, 512);
+  const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+  gradient.addColorStop(0, "#0a1228");
+  gradient.addColorStop(0.4, "#101a30");
+  gradient.addColorStop(0.68, "#1d2438");
+  gradient.addColorStop(0.86, "#33304a");
+  gradient.addColorStop(1, "#4a3c40");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 16, 512);
+  const texture = toTexture(canvas, true, false);
+  return texture;
+}
+
+/** Nappe de nuages fins (alpha en bruit fractal, bords fondus). */
+export function cloudTexture(size = 256): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+  const data = ctx.createImageData(size, size);
+
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      const u = px / size;
+      const v = py / size;
+      const i = (py * size + px) * 4;
+      const density = fbm(u * 5, v * 9 + 13.7, 4);
+      // Fondu radial pour éviter les bords nets
+      const dx = u - 0.5;
+      const dy = v - 0.5;
+      const falloff = Math.max(0, 1 - Math.hypot(dx * 2, dy * 2.4));
+      const alpha = Math.max(0, density * 1.6 - 0.72) * falloff;
+      data.data[i] = 200;
+      data.data[i + 1] = 210;
+      data.data[i + 2] = 232;
+      data.data[i + 3] = Math.min(255, alpha * 340);
+    }
+  }
+  ctx.putImageData(data, 0, 0);
+  return toTexture(canvas, true, false);
+}
+
+/** Ombre de contact douce (disque sombre fondu) à poser sous les objets. */
+export function shadowBlobTexture(size = 128): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(size);
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 2, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, "rgba(0,0,0,0.6)");
+  gradient.addColorStop(0.6, "rgba(0,0,0,0.28)");
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  return toTexture(canvas, true, false);
+}
+
 /** Ciel étoilé : positions aléatoires sur un grand dôme. */
 export function starPositions(count: number, radius: number): Float32Array {
   const positions = new Float32Array(count * 3);

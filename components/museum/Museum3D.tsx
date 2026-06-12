@@ -2,14 +2,32 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Suspense } from "react";
+import { EffectComposer, Bloom, Noise, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { Post } from "@/lib/types";
 import FacadeScene from "./FacadeScene";
 import CorridorScene, { corridorBounds, START_Z, type FocusState } from "./CorridorScene";
 
 type Phase = "facade" | "entering" | "corridor";
+
+/**
+ * Champ de vision adaptatif : en portrait (mobile), l'angle est élargi
+ * pour que les murs latéraux du couloir et le fronton restent visibles.
+ */
+function AdaptiveFov({ base }: { base: number }) {
+  const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
+  const size = useThree((state) => state.size);
+
+  useEffect(() => {
+    const aspect = size.width / size.height;
+    camera.fov = aspect < 1 ? Math.min(96, base + (1 - aspect) * 42) : base;
+    camera.updateProjectionMatrix();
+  }, [camera, size, base]);
+
+  return null;
+}
 
 const SESSION_KEY = "herkul-museum";
 
@@ -54,6 +72,7 @@ export default function Museum3D({
     session ? THREE.MathUtils.clamp(session.z, bounds.end, bounds.start) : START_Z
   );
   const touchY = useRef<number | null>(null);
+  const backAccum = useRef(0);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const focusRef = useRef(focus);
@@ -114,6 +133,22 @@ export default function Museum3D({
     [bounds]
   );
 
+  /** Retour sur le parvis : on ressort du couloir par où on est entré. */
+  const exitToFacade = useCallback(() => {
+    if (phaseRef.current !== "corridor" || focusRef.current?.diving) return;
+    setFocus(null);
+    setFlash(true);
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+    setTimeout(() => {
+      setPhase("facade");
+      setTimeout(() => setFlash(false), 150);
+    }, 500);
+  }, []);
+
   const handleWheel = useCallback(
     (event: React.WheelEvent) => {
       if (phaseRef.current !== "corridor") return;
@@ -122,9 +157,19 @@ export default function Museum3D({
         if (!current.diving) setFocus(null);
         return;
       }
+      // Au début du couloir, continuer à reculer ramène au temple
+      if (event.deltaY < 0 && travelZ.current >= bounds.start - 0.05) {
+        backAccum.current += -event.deltaY;
+        if (backAccum.current > 260) {
+          backAccum.current = 0;
+          exitToFacade();
+        }
+        return;
+      }
+      backAccum.current = 0;
       advance(event.deltaY * 0.012);
     },
-    [advance]
+    [advance, bounds, exitToFacade]
   );
 
   const handleTouchStart = useCallback((event: React.TouchEvent) => {
@@ -142,9 +187,19 @@ export default function Museum3D({
         if (!current.diving && Math.abs(dy) > 6) setFocus(null);
         return;
       }
+      // Glisser vers le bas à l'entrée du couloir = ressortir vers le temple
+      if (dy > 0 && travelZ.current >= bounds.start - 0.05) {
+        backAccum.current += dy;
+        if (backAccum.current > 150) {
+          backAccum.current = 0;
+          exitToFacade();
+        }
+        return;
+      }
+      backAccum.current = 0;
       advance(-dy * 0.03);
     },
-    [advance]
+    [advance, bounds, exitToFacade]
   );
 
   /** Clic sur une œuvre : approche, puis traversée vers l'article. */
@@ -196,6 +251,7 @@ export default function Museum3D({
           setFocus((current) => (current && !current.diving ? null : current));
         }}
       >
+        <AdaptiveFov base={phase === "corridor" ? 62 : 55} />
         <Suspense fallback={null}>
           {phase === "corridor" ? (
             <CorridorScene
@@ -209,6 +265,12 @@ export default function Museum3D({
             <FacadeScene entering={phase === "entering"} highQuality={highQuality} />
           )}
         </Suspense>
+        {/* Rendu cinématographique : éclat des flammes, grain, vignettage */}
+        <EffectComposer multisampling={highQuality ? 4 : 0}>
+          <Bloom intensity={0.55} luminanceThreshold={0.88} luminanceSmoothing={0.2} mipmapBlur />
+          <Noise premultiply opacity={0.05} />
+          <Vignette eskil={false} offset={0.16} darkness={0.78} />
+        </EffectComposer>
       </Canvas>
 
       {/* ——— Interface ——— */}
