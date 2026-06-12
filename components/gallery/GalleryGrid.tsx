@@ -52,7 +52,7 @@ export default function GalleryGrid({ posts }: { posts: Post[] }) {
             delay={(index % 3) * 0.1}
             className={offsetFor(index)}
           >
-            <ArticleCard post={post} index={index} />
+            <ArticleCard post={post} index={index} number={posts.length - index} />
           </Reveal>
         ))}
       </div>

@@ -15,9 +15,12 @@ import type { Post } from "@/lib/types";
 export default function ArticleCard({
   post,
   index = 0,
+  number,
 }: {
   post: Post;
   index?: number;
+  /** Numéro d'exposition affiché (chronologique). Par défaut : index + 1. */
+  number?: number;
 }) {
   const excerpt = excerptFromHtml(post.content, 130);
 
@@ -82,7 +85,7 @@ export default function ArticleCard({
       {/* Cartel d'exposition */}
       <div className="mt-5 border-l border-gold/40 pl-4">
         <p className="flex flex-wrap items-baseline gap-x-3 text-[10px] uppercase tracking-widecaps text-gold/80">
-          <span>Œuvre {toRoman(index + 1)}</span>
+          <span>Œuvre {toRoman(number ?? index + 1)}</span>
           <span className="text-parchment/35">
             <time dateTime={post.created_at}>{formatDate(post.created_at)}</time>
           </span>

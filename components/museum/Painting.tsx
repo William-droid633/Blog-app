@@ -68,6 +68,8 @@ function ArtFallback() {
 export interface PaintingPlacement {
   post: Post;
   index: number;
+  /** Numéro d'exposition chronologique : la plus ancienne œuvre est la I. */
+  number: number;
   position: THREE.Vector3;
   rotationY: number;
   /** Normale du mur : direction vers le centre du couloir. */
@@ -90,7 +92,7 @@ export default function Painting({
   onSelect: (index: number) => void;
   beam: THREE.Texture;
 }) {
-  const { post, index, position, rotationY } = placement;
+  const { post, index, number, position, rotationY } = placement;
   const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
@@ -190,7 +192,7 @@ export default function Painting({
               color: "#8a6a3c",
             }}
           >
-            ŒUVRE {toRoman(index + 1)}
+            ŒUVRE {toRoman(number)}
           </div>
           <div
             style={{

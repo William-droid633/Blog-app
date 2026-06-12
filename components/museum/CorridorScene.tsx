@@ -26,6 +26,10 @@ export const START_Z = 5;
 const FIRST_ART_Z = -6;
 const ART_STEP = 4.5;
 const WALL_X = HALL_WIDTH / 2;
+/** Léger décollement du mur : l'œuvre est inclinée vers le visiteur. */
+const ART_OFFSET = 0.42;
+/** Angle d'orientation de la toile vers l'allée centrale (≈ 11°). */
+const ART_TILT = 0.2;
 
 /** Bornes de déplacement de la caméra selon le nombre d'œuvres. */
 export function corridorBounds(count: number): { start: number; end: number } {
@@ -33,19 +37,29 @@ export function corridorBounds(count: number): { start: number; end: number } {
   return { start: START_Z, end: lastZ - 5 };
 }
 
-/** Position de chaque œuvre : alternance mur gauche / mur droit. */
+/**
+ * Position de chaque œuvre : alternance mur gauche / mur droit. Le numéro
+ * d'exposition est chronologique (la plus ancienne est la I) ; comme les
+ * articles arrivent du plus récent au plus ancien, on inverse l'index.
+ * Chaque toile est légèrement décollée du mur et pivotée pour que son bord
+ * amont ressorte et tourne la peinture vers le visiteur qui s'avance.
+ */
 export function placePaintings(posts: Post[]): PaintingPlacement[] {
+  const total = posts.length;
   return posts.map((post, index) => {
     const left = index % 2 === 0;
     return {
       post,
       index,
+      number: total - index,
       position: new THREE.Vector3(
-        left ? -WALL_X + 0.12 : WALL_X - 0.12,
+        left ? -WALL_X + ART_OFFSET : WALL_X - ART_OFFSET,
         ART_Y,
         FIRST_ART_Z - index * ART_STEP
       ),
-      rotationY: left ? Math.PI / 2 : -Math.PI / 2,
+      // Le visiteur progresse vers les z décroissants : on oriente la face
+      // vers +z (vers lui) en réduisant l'angle plaqué au mur.
+      rotationY: left ? Math.PI / 2 - ART_TILT : -Math.PI / 2 + ART_TILT,
       normal: new THREE.Vector3(left ? 1 : -1, 0, 0),
     };
   });

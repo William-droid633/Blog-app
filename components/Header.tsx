@@ -31,12 +31,12 @@ export default function Header() {
           <img
             src="/logo.svg"
             alt={`Logo ${SITE_NAME}`}
-            className="h-10 w-auto"
+            className="site-logo h-12 w-auto sm:h-14"
             onError={(e) => {
               e.currentTarget.style.display = "none";
             }}
           />
-          <span className="font-display text-xl font-semibold tracking-inscription text-parchment transition-colors group-hover:text-goldlight sm:text-2xl">
+          <span className="site-wordmark font-display text-xl font-semibold tracking-inscription text-parchment transition-colors group-hover:text-goldlight sm:text-2xl">
             {SITE_NAME.toUpperCase()}
           </span>
         </Link>

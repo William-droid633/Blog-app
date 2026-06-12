@@ -30,6 +30,16 @@ const PORCH_DEPTH = 5;
 
 const ENTAB_Y = PODIUM_HEIGHT + 0.5 + COLUMN_HEIGHT + 0.42;
 
+/* Battants de bronze : entrebâillés au repos, grands ouverts à l'entrée. */
+const DOOR_AJAR = 0.12;
+const DOOR_OPEN = 1.2;
+/* Durée de l'approche (s) ; doit correspondre au minuteur de Museum3D. */
+const ENTER_DURATION = 2.2;
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 function glowCanvas(color: string): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 128;
@@ -319,6 +329,15 @@ export default function FacadeScene({
 }) {
   const { camera } = useThree();
 
+  // Suivi de l'approche : instant de départ et position initiale figés au
+  // premier frame d'entrée pour une interpolation parfaitement fluide.
+  const enterStart = useRef<number | null>(null);
+  const camStart = useRef(new THREE.Vector3());
+  const leftDoor = useRef<THREE.Group>(null);
+  const rightDoor = useRef<THREE.Group>(null);
+  const interiorLight = useRef<THREE.PointLight>(null);
+  const interiorGlow = useRef<THREE.MeshBasicMaterial>(null);
+
   const marble = useMemo(() => marbleSurface(), []);
   const marbleWall = useMemo(() => setRepeat(travertineSurface(), 4, 2.4), []);
   const bronze = useMemo(() => bronzeSurface(), []);
@@ -339,17 +358,58 @@ export default function FacadeScene({
 
   useFrame(({ pointer, clock }, delta) => {
     if (entering) {
-      camera.position.x = THREE.MathUtils.damp(camera.position.x, 0, 2.2, delta);
-      camera.position.y = THREE.MathUtils.damp(camera.position.y, PODIUM_HEIGHT + 3.2, 1.8, delta);
-      camera.position.z = THREE.MathUtils.damp(camera.position.z, 0.6, 1.5, delta);
-      camera.lookAt(0, PODIUM_HEIGHT + 3, -8);
+      // On fige le point de départ réel : l'approche part exactement d'où se
+      // trouve le visiteur, sans aucun saut vers le haut.
+      if (enterStart.current === null) {
+        enterStart.current = clock.elapsedTime;
+        camStart.current.copy(camera.position);
+      }
+      const t = THREE.MathUtils.clamp(
+        (clock.elapsedTime - enterStart.current) / ENTER_DURATION,
+        0,
+        1
+      );
+      const e = easeInOutCubic(t);
+
+      // Glissé fluide jusqu'au seuil, à hauteur d'œil, puis à travers la porte.
+      const eyeY = PODIUM_HEIGHT + 1.7;
+      const targetZ = -PORCH_DEPTH - 0.2;
+      camera.position.x = THREE.MathUtils.lerp(camStart.current.x, 0, e);
+      camera.position.y = THREE.MathUtils.lerp(camStart.current.y, eyeY, e);
+      camera.position.z = THREE.MathUtils.lerp(camStart.current.z, targetZ, e);
+      // Le regard descend en douceur du fronton vers le cœur lumineux du temple.
+      camera.lookAt(0, THREE.MathUtils.lerp(10.4, eyeY, e), THREE.MathUtils.lerp(0, -14, e));
+
+      // Les battants s'ouvrent en grand, un peu en avance sur la marche.
+      const open = THREE.MathUtils.lerp(
+        DOOR_AJAR,
+        DOOR_OPEN,
+        easeInOutCubic(Math.min(t * 1.3, 1))
+      );
+      if (leftDoor.current) leftDoor.current.rotation.y = open;
+      if (rightDoor.current) rightDoor.current.rotation.y = -open;
+
+      // La lumière du sanctuaire enfle jusqu'à emplir tout l'écran.
+      if (interiorLight.current) interiorLight.current.intensity = 20 + e * 170;
+      if (interiorGlow.current) interiorGlow.current.opacity = Math.min(1, e * 1.2);
     } else {
+      enterStart.current = null;
       // Regard levé vers le fronton : sentiment de monumentalité
       const breathe = Math.sin(clock.elapsedTime * 0.4) * 0.1;
       camera.position.x = THREE.MathUtils.damp(camera.position.x, pointer.x * 1.8, 1.4, delta);
       camera.position.y = THREE.MathUtils.damp(camera.position.y, 2 + breathe + pointer.y * 0.6, 1.4, delta);
       camera.position.z = THREE.MathUtils.damp(camera.position.z, 25, 1.2, delta);
       camera.lookAt(0, 10.4 + pointer.y * 1.2, 0);
+
+      // Les portes se referment doucement (retour du couloir au parvis).
+      if (leftDoor.current)
+        leftDoor.current.rotation.y = THREE.MathUtils.damp(leftDoor.current.rotation.y, DOOR_AJAR, 2.4, delta);
+      if (rightDoor.current)
+        rightDoor.current.rotation.y = THREE.MathUtils.damp(rightDoor.current.rotation.y, -DOOR_AJAR, 2.4, delta);
+      if (interiorLight.current) interiorLight.current.intensity = 20;
+      // Lueur résiduelle filtrant par l'entrebâillement au repos.
+      if (interiorGlow.current)
+        interiorGlow.current.opacity = THREE.MathUtils.damp(interiorGlow.current.opacity, 0.12, 3, delta);
     }
   });
 
@@ -452,33 +512,65 @@ export default function FacadeScene({
         <boxGeometry args={[5.4, 7.4, 0.3]} />
         <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
-      {/* Portes de bronze patiné, entrouvertes */}
-      <mesh position={[-1.15, doorY - 0.2, -PORCH_DEPTH + 0.26]} rotation={[0, 0.16, 0]} castShadow>
-        <boxGeometry args={[2.1, 6.6, 0.16]} />
-        <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
+      {/* Cœur lumineux du sanctuaire, révélé par l'ouverture des portes */}
+      <mesh position={[0, doorY - 0.2, -PORCH_DEPTH + 0.15]}>
+        <planeGeometry args={[5.2, 7.2]} />
+        <meshBasicMaterial
+          ref={interiorGlow}
+          color="#fff3da"
+          transparent
+          opacity={0}
+          toneMapped={false}
+          depthWrite={false}
+        />
       </mesh>
-      <mesh position={[1.15, doorY - 0.2, -PORCH_DEPTH + 0.26]} rotation={[0, -0.16, 0]} castShadow>
-        <boxGeometry args={[2.1, 6.6, 0.16]} />
-        <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
-      </mesh>
-      {/* Clous de bronze */}
-      {[-1, 1].map((side) =>
-        [0, 1, 2, 3].map((row) => (
-          <mesh key={`${side}-${row}`} position={[side * 1.15, doorY - 2.4 + row * 1.5, -PORCH_DEPTH + 0.36]}>
+      {/* Portes de bronze patiné, articulées sur leurs gonds extérieurs.
+          Entrebâillées au repos, elles s'ouvrent en grand à l'entrée puis
+          se referment au retour du couloir. */}
+      <group
+        ref={leftDoor}
+        position={[-2.2, doorY - 0.2, -PORCH_DEPTH + 0.26]}
+        rotation={[0, DOOR_AJAR, 0]}
+      >
+        <mesh position={[1.05, 0, 0]} castShadow>
+          <boxGeometry args={[2.1, 6.6, 0.16]} />
+          <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
+        </mesh>
+        {[0, 1, 2, 3].map((row) => (
+          <mesh key={row} position={[1.05, -2.2 + row * 1.5, 0.1]}>
             <sphereGeometry args={[0.07, 10, 8]} />
             <meshStandardMaterial color="#8a6530" metalness={0.9} roughness={0.3} />
           </mesh>
-        ))
-      )}
-      {/* Lumière dorée filtrant par l'entrebâillement */}
-      <mesh position={[0, doorY - 0.2, -PORCH_DEPTH + 0.3]}>
-        <planeGeometry args={[0.34, 6.3]} />
-        <meshBasicMaterial color="#ffd9a0" toneMapped={false} />
-      </mesh>
+        ))}
+      </group>
+      <group
+        ref={rightDoor}
+        position={[2.2, doorY - 0.2, -PORCH_DEPTH + 0.26]}
+        rotation={[0, -DOOR_AJAR, 0]}
+      >
+        <mesh position={[-1.05, 0, 0]} castShadow>
+          <boxGeometry args={[2.1, 6.6, 0.16]} />
+          <meshStandardMaterial {...bronze} bumpScale={0.8} metalness={0.75} />
+        </mesh>
+        {[0, 1, 2, 3].map((row) => (
+          <mesh key={row} position={[-1.05, -2.2 + row * 1.5, 0.1]}>
+            <sphereGeometry args={[0.07, 10, 8]} />
+            <meshStandardMaterial color="#8a6530" metalness={0.9} roughness={0.3} />
+          </mesh>
+        ))}
+      </group>
+      {/* Halo chaud émanant de l'entrebâillement */}
       <sprite scale={[5, 8, 1]} position={[0, doorY - 0.4, -PORCH_DEPTH + 0.7]}>
         <spriteMaterial map={doorGlow} transparent opacity={0.34} depthWrite={false} blending={THREE.AdditiveBlending} />
       </sprite>
-      <pointLight position={[0, doorY - 0.4, -PORCH_DEPTH + 1.6]} color="#ffce8a" intensity={20} distance={14} decay={2} />
+      <pointLight
+        ref={interiorLight}
+        position={[0, doorY - 0.4, -PORCH_DEPTH + 1.6]}
+        color="#ffce8a"
+        intensity={20}
+        distance={18}
+        decay={2}
+      />
 
       {/* Entablement : architrave à fasces, frise gravée, denticules, corniche */}
       <mesh position={[0, ENTAB_Y + 0.3, -0.2]} castShadow receiveShadow>

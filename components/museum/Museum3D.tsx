@@ -83,12 +83,16 @@ export default function Museum3D({
     []
   );
 
-  // Bloque le défilement de la page : la molette appartient au musée
+  // Bloque le défilement de la page : la molette appartient au musée.
+  // On masque aussi le titre et la navigation de l'en-tête (seul le logo
+  // reste) pour qu'aucun élément ne traîne pendant les transitions.
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    document.body.classList.add("museum-immersive");
     return () => {
       document.body.style.overflow = previous;
+      document.body.classList.remove("museum-immersive");
     };
   }, []);
 
@@ -110,16 +114,20 @@ export default function Museum3D({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  /** Franchissement des portes du temple. */
+  /** Franchissement des portes du temple : approche fluide jusqu'au seuil,
+   *  les portes s'ouvrent sur la lumière, puis l'écran blanc prend le relais
+   *  une fois que l'on baigne déjà dans cette lumière (cf. FacadeScene). */
   const enter = useCallback(() => {
     if (phaseRef.current !== "facade") return;
     setPhase("entering");
-    setTimeout(() => setFlash(true), 800);
+    // Le voile blanc n'arrive qu'au bout de l'approche, quand la lumière du
+    // sanctuaire emplit déjà l'écran : la bascule reste imperceptible.
+    setTimeout(() => setFlash(true), 1700);
     setTimeout(() => {
       travelZ.current = START_Z;
       setPhase("corridor");
-      setTimeout(() => setFlash(false), 120);
-    }, 1700);
+      setTimeout(() => setFlash(false), 280);
+    }, 2200);
   }, []);
 
   const advance = useCallback(
@@ -145,8 +153,8 @@ export default function Museum3D({
     }
     setTimeout(() => {
       setPhase("facade");
-      setTimeout(() => setFlash(false), 150);
-    }, 500);
+      setTimeout(() => setFlash(false), 280);
+    }, 550);
   }, []);
 
   const handleWheel = useCallback(
@@ -329,8 +337,8 @@ export default function Museum3D({
         </>
       )}
 
-      {/* Bascule vers la version classique */}
-      {!veil && (
+      {/* Bascule vers la version classique (masquée pendant les transitions) */}
+      {!veil && phase !== "entering" && !flash && (
         <button
           type="button"
           onClick={onClassic}
@@ -351,10 +359,12 @@ export default function Museum3D({
         </p>
       </div>
 
-      {/* Éclat doré : traversée des portes et des toiles */}
+      {/* Éclat doré : traversée des portes et des toiles. La montée est
+          rapide pour atteindre le blanc complet pile au changement de scène,
+          la descente plus douce pour révéler le couloir en fondu. */}
       <div
-        className={`pointer-events-none absolute inset-0 bg-parchment transition-opacity duration-700 ${
-          flash ? "opacity-100" : "opacity-0"
+        className={`pointer-events-none absolute inset-0 bg-parchment transition-opacity ${
+          flash ? "opacity-100 duration-500" : "opacity-0 duration-700"
         }`}
       />
     </div>

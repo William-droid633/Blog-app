@@ -11,6 +11,14 @@
   color: #0c0a08;
 }
 
+/* Pendant la visite 3D immersive, seul le logo reste affiché dans l'en-tête :
+   le titre et la navigation apparaîtraient sinon à contretemps des
+   transitions d'entrée et de sortie du temple. */
+body.museum-immersive header nav,
+body.museum-immersive header .site-wordmark {
+  display: none;
+}
+
 /* Grain photographique très léger sur toute la galerie */
 .grain::before {
   content: "";
