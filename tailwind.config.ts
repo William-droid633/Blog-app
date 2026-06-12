@@ -8,13 +8,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        /* — Galerie (façade publique, sombre) — */
+        /* — Musée romain (façade publique, sombre) — */
         night: "#0C0A08",
         coal: "#14100C",
         smoke: "#1E1812",
         gold: "#C9A36A",
         goldlight: "#E8CD9C",
+        bronze: "#9C7440",
+        marble: "#E8E2D2",
+        stone: "#B8B09C",
         parchment: "#F3ECDD",
+        pompeii: "#8C3B2E",
 
         /* — Palette chaude (admin, claire) — */
         cream: "#FAF6EF",
@@ -28,11 +32,13 @@ const config: Config = {
       },
       fontFamily: {
         display: ["var(--font-display)", "Georgia", "serif"],
-        body: ["var(--font-sans)", "system-ui", "Segoe UI", "sans-serif"],
+        accent: ["var(--font-accent)", "Georgia", "serif"],
         serif: ["var(--font-serif)", "Georgia", "serif"],
+        body: ["var(--font-sans)", "system-ui", "Segoe UI", "sans-serif"],
       },
       letterSpacing: {
         widecaps: "0.3em",
+        inscription: "0.18em",
       },
       keyframes: {
         marquee: {
@@ -47,7 +53,7 @@ const config: Config = {
         },
       },
       animation: {
-        marquee: "marquee 28s linear infinite",
+        marquee: "marquee 30s linear infinite",
         scrollcue: "scrollcue 2.2s ease-in-out infinite",
       },
     },

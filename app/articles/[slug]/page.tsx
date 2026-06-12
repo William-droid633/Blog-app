@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import ReadingProgress from "@/components/gallery/ReadingProgress";
 import Reveal from "@/components/gallery/Reveal";
+import Meander from "@/components/roman/Meander";
 import { createClient } from "@/lib/supabase-server";
 import { excerptFromHtml } from "@/lib/excerpt";
 import { formatDate } from "@/lib/format-date";
@@ -48,7 +49,7 @@ export default async function ArticlePage({ params }: Props) {
     <article className="relative">
       <ReadingProgress />
 
-      {/* Salle d'exposition : l'œuvre en pleine lumière */}
+      {/* La salle : l'œuvre en pleine lumière */}
       <header className="relative flex min-h-[72svh] items-end overflow-hidden">
         {post.cover_image ? (
           <>
@@ -92,10 +93,13 @@ export default async function ArticlePage({ params }: Props) {
             <p className="text-[11px] uppercase tracking-widecaps text-gold">
               <time dateTime={post.created_at}>{formatDate(post.created_at)}</time>
             </p>
-            <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.1] text-parchment sm:text-6xl">
+            <h1 className="mt-4 font-display text-3xl font-bold leading-[1.15] tracking-wide text-parchment sm:text-5xl">
               {post.title}
             </h1>
-            <div className="mt-8 h-px w-32 bg-gradient-to-r from-gold to-transparent" />
+            <div className="mt-8 flex flex-col gap-1.5">
+              <span className="h-px w-40 bg-gradient-to-r from-gold to-transparent" />
+              <span className="h-px w-40 bg-gradient-to-r from-gold/40 to-transparent" />
+            </div>
           </Reveal>
         </div>
       </header>
@@ -103,11 +107,14 @@ export default async function ArticlePage({ params }: Props) {
       {/* Le cartel : contenu sur panneau papier, fidèle à l'éditeur */}
       <div className="mx-auto w-full max-w-4xl px-4 pb-24 sm:px-6">
         <Reveal>
-          <div className="rounded-sm bg-cream p-6 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] ring-1 ring-gold/20 sm:p-12 md:p-16">
-            <div
-              className="rich-text"
-              dangerouslySetInnerHTML={{ __html: post.content ?? "" }}
-            />
+          <div className="article-paper overflow-hidden rounded-sm bg-cream shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9)] ring-1 ring-gold/25">
+            <Meander className="text-bark/40" />
+            <div className="p-6 sm:p-12 md:p-16">
+              <div
+                className="rich-text"
+                dangerouslySetInnerHTML={{ __html: post.content ?? "" }}
+              />
+            </div>
           </div>
         </Reveal>
 
@@ -119,7 +126,7 @@ export default async function ArticlePage({ params }: Props) {
             <span aria-hidden="true" className="transition-transform duration-300 group-hover:-translate-x-1">
               ←
             </span>
-            Retour à la galerie
+            Retour au musée
           </Link>
         </div>
       </div>
