@@ -38,7 +38,7 @@ function LoadedArt({ url }: { url: string }) {
   }, [texture]);
 
   return (
-    <mesh position={[0, 0, 0.075]}>
+    <mesh position={[0, 0, 0.11]}>
       <planeGeometry args={[ART_WIDTH - 0.16, ART_HEIGHT - 0.16]} />
       <meshBasicMaterial map={texture} toneMapped={false} />
     </mesh>
@@ -48,7 +48,7 @@ function LoadedArt({ url }: { url: string }) {
 function PlaceholderArt({ title }: { title: string }) {
   const texture = useMemo(() => placeholderArtTexture(title), [title]);
   return (
-    <mesh position={[0, 0, 0.075]}>
+    <mesh position={[0, 0, 0.11]}>
       <planeGeometry args={[ART_WIDTH - 0.16, ART_HEIGHT - 0.16]} />
       <meshBasicMaterial map={texture} toneMapped={false} />
     </mesh>
@@ -57,7 +57,7 @@ function PlaceholderArt({ title }: { title: string }) {
 
 function ArtFallback() {
   return (
-    <mesh position={[0, 0, 0.075]}>
+    <mesh position={[0, 0, 0.11]}>
       <planeGeometry args={[ART_WIDTH - 0.16, ART_HEIGHT - 0.16]} />
       <meshBasicMaterial color="#1a1510" />
     </mesh>
@@ -159,14 +159,15 @@ export default function Painting({
         />
       </sprite>
 
-      {/* Caisse du cadre : gorge profonde bronze */}
-      <mesh position={[0, 0, -0.02]} castShadow>
+      {/* Caisse du cadre : gorge profonde bronze (en retrait derrière l'or) */}
+      <mesh position={[0, 0, -0.05]} castShadow>
         <boxGeometry args={[ART_WIDTH + 0.56, ART_HEIGHT + 0.56, 0.12]} />
         <meshStandardMaterial color="#4a3318" metalness={0.6} roughness={0.5} />
       </mesh>
-      {/* Plate-bande godronnée dorée */}
+      {/* Plate-bande godronnée dorée : la moulure visible, cliquable.
+          C'est ICI que joue le reflet du bronze — plus sur la toile. */}
       <mesh
-        position={[0, 0, 0.03]}
+        position={[0, 0, 0]}
         castShadow
         onClick={(event) => {
           event.stopPropagation();
@@ -179,23 +180,18 @@ export default function Painting({
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <boxGeometry args={[ART_WIDTH + 0.42, ART_HEIGHT + 0.42, 0.13]} />
+        <boxGeometry args={[ART_WIDTH + 0.42, ART_HEIGHT + 0.42, 0.1]} />
         <meshStandardMaterial color={active ? "#dcb978" : "#b8924f"} metalness={0.82} roughness={0.3} />
       </mesh>
-      {/* Listel intérieur sombre */}
-      <mesh position={[0, 0, 0.07]}>
-        <boxGeometry args={[ART_WIDTH + 0.16, ART_HEIGHT + 0.16, 0.06]} />
-        <meshStandardMaterial color="#6b4f28" metalness={0.7} roughness={0.4} />
-      </mesh>
-      {/* Rang de perles doré au fil de la vue */}
+      {/* Rang de perles doré bordant la vue */}
       <Beads active={active} />
-      {/* Marie-louise (carton biseauté clair) */}
-      <mesh position={[0, 0, 0.06]}>
+      {/* Marie-louise (carton clair mat) : fine bordure crème autour de la toile */}
+      <mesh position={[0, 0, 0.075]}>
         <planeGeometry args={[ART_WIDTH + 0.02, ART_HEIGHT + 0.02]} />
-        <meshStandardMaterial color="#efe7d4" roughness={0.85} />
+        <meshStandardMaterial color="#efe7d4" roughness={0.92} metalness={0} />
       </mesh>
 
-      {/* La toile */}
+      {/* La toile — couche la plus en avant, mate (aucun voile dessus) */}
       <Suspense fallback={<ArtFallback />}>
         {post.cover_image ? (
           <LoadedArt url={post.cover_image} />
@@ -242,7 +238,7 @@ function Beads({ active }: { active: boolean }) {
   }, []);
 
   return (
-    <group position={[0, 0, 0.085]}>
+    <group position={[0, 0, 0.055]}>
       {positions.map(([x, y], i) => (
         <mesh key={i} position={[x, y, 0]}>
           <sphereGeometry args={[0.026, 6, 5]} />

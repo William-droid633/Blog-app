@@ -336,9 +336,8 @@ function Niche({
       </group>
       {/* Lueur chaude diffuse au fond de la niche (halo rond, sans rectangle) */}
       <sprite position={[0, 1.55, -0.04]} scale={[1.5, 2.3, 1]}>
-        <spriteMaterial map={glow} color="#e0b878" transparent opacity={0.3} depthWrite={false} blending={THREE.AdditiveBlending} />
+        <spriteMaterial map={glow} color="#e0b878" transparent opacity={0.32} depthWrite={false} blending={THREE.AdditiveBlending} />
       </sprite>
-      <pointLight position={[0, 1.5, 0.5]} color="#ffb86a" intensity={3.2} distance={3.4} decay={2} />
     </group>
   );
 }
