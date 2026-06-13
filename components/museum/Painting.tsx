@@ -240,13 +240,13 @@ export default function Painting({
 
       {/* Cartel gravé, plaqué sous l'œuvre — nettement détaché du cadre pour
           éviter tout chevauchement (z-fighting) avec sa bordure inférieure */}
-      <group position={[0, -(ART_HEIGHT / 2) - 0.7, -0.04]}>
+      <group position={[0, -(ART_HEIGHT / 2) - 0.55, -0.04]}>
         <mesh castShadow>
-          <boxGeometry args={[1.0, 0.64, 0.05]} />
+          <boxGeometry args={[1.34, 0.86, 0.05]} />
           <meshStandardMaterial color="#cdbf9f" roughness={0.8} />
         </mesh>
         <mesh position={[0, 0, 0.03]}>
-          <planeGeometry args={[0.9, 0.56]} />
+          <planeGeometry args={[1.2, 0.75]} />
           <meshBasicMaterial map={cartel} transparent toneMapped={false} />
         </mesh>
       </group>

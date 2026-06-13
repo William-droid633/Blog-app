@@ -693,8 +693,8 @@ function drawCartel(
   const accent = fontFamily("--font-accent");
 
   // ŒUVRE + chiffre romain
-  ctx.fillStyle = "#8a6a3c";
-  ctx.font = `600 ${Math.round(h * 0.1)}px ${display}`;
+  ctx.fillStyle = "#7a5a2c";
+  ctx.font = `600 ${Math.round(h * 0.115)}px ${display}`;
   ctx.textBaseline = "middle";
   fillTracked(ctx, `ŒUVRE ${roman}`, w / 2, h * 0.24, h * 0.05);
 
@@ -708,16 +708,16 @@ function drawCartel(
 
   // Titre (1–2 lignes)
   ctx.fillStyle = "#2c2317";
-  ctx.font = `700 ${Math.round(h * 0.15)}px ${display}`;
-  const lines = wrapTitle(ctx, title.toUpperCase(), w * 0.82);
-  const titleY = lines.length === 1 ? h * 0.52 : h * 0.46;
+  ctx.font = `700 ${Math.round(h * 0.18)}px ${display}`;
+  const lines = wrapTitle(ctx, title.toUpperCase(), w * 0.88);
+  const titleY = lines.length === 1 ? h * 0.53 : h * 0.45;
   lines.forEach((line, i) => {
-    ctx.fillText(line, w / 2, titleY + i * h * 0.17);
+    ctx.fillText(line, w / 2, titleY + i * h * 0.2);
   });
 
   // Date en italique
   ctx.fillStyle = "#6f5a3a";
-  ctx.font = `italic 400 ${Math.round(h * 0.105)}px ${accent}`;
+  ctx.font = `italic 400 ${Math.round(h * 0.12)}px ${accent}`;
   ctx.fillText(date, w / 2, h * 0.82);
 }
 
@@ -731,8 +731,8 @@ export function cartelTexture(
   roman: string,
   title: string,
   date: string,
-  width = 640,
-  height = 400
+  width = 896,
+  height = 560
 ): THREE.CanvasTexture {
   const [canvas, ctx] = makeCanvas(width, height);
   drawCartel(canvas, ctx, roman, title, date);
