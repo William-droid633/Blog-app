@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Suspense } from "react";
 import { EffectComposer, Bloom, Noise, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
@@ -29,29 +29,6 @@ function AdaptiveFov({ base }: { base: number }) {
     camera.updateProjectionMatrix();
   }, [camera, size, base]);
 
-  return null;
-}
-
-/**
- * Limite la mise à jour des ombres à ~30 images/seconde au lieu de chaque
- * image : la lumière et l'essentiel du décor sont fixes, donc recalculer les
- * cartes d'ombres 60 fois par seconde est du gaspillage. Rendu quasi
- * identique, passe d'ombres deux fois moins fréquente.
- */
-function ShadowThrottle({ fps = 30 }: { fps?: number }) {
-  const gl = useThree((state) => state.gl);
-  const elapsed = useRef(0);
-  useEffect(() => {
-    gl.shadowMap.autoUpdate = false;
-    gl.shadowMap.needsUpdate = true; // une première passe d'ombres
-  }, [gl]);
-  useFrame((_, delta) => {
-    elapsed.current += delta;
-    if (elapsed.current >= 1 / fps) {
-      elapsed.current = 0;
-      gl.shadowMap.needsUpdate = true;
-    }
-  });
   return null;
 }
 
@@ -303,7 +280,6 @@ export default function Museum3D({
         }}
       >
         <AdaptiveFov base={phase === "corridor" ? 62 : 55} />
-        <ShadowThrottle fps={30} />
         <Suspense fallback={null}>
           {phase === "corridor" ? (
             <CorridorScene

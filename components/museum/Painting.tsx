@@ -277,8 +277,11 @@ function Beads({ active }: { active: boolean }) {
   return (
     <group position={[0, 0, 0.055]}>
       {/* Toutes les perles d'un cadre en un seul dessin (instanciation) au
-          lieu d'une centaine de petits objets distincts. */}
-      <Instances limit={positions.length} range={positions.length}>
+          lieu d'une centaine de petits objets distincts. frustumCulled coupé :
+          sinon le lot entier (petite sphère englobante au centre du cadre)
+          disparaît dès que le centre sort du champ — donc trop tôt quand
+          l'œuvre passe à côté de soi. */}
+      <Instances limit={positions.length} range={positions.length} frustumCulled={false}>
         <sphereGeometry args={[0.026, 6, 5]} />
         <meshStandardMaterial color={active ? "#e8cd9c" : "#bb9656"} metalness={0.85} roughness={0.3} />
         {positions.map(([x, y], i) => (
