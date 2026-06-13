@@ -73,7 +73,13 @@ function SkyDome() {
   return (
     <mesh renderOrder={-2}>
       <sphereGeometry args={[130, 48, 32]} />
-      <meshBasicMaterial map={texture} side={THREE.BackSide} fog={false} depthWrite={false} />
+      <meshBasicMaterial
+        map={texture}
+        side={THREE.BackSide}
+        fog={false}
+        depthWrite={false}
+        toneMapped={false}
+      />
     </mesh>
   );
 }
@@ -140,7 +146,7 @@ function Stars({ highQuality }: { highQuality: boolean }) {
   const layers = useMemo(() => {
     const q = highQuality ? 1 : 0.55;
     const defs = [
-      { count: Math.round(60 * (highQuality ? 1 : 0.7)), radius: 100, size: 1.15, brightness: 1.0, glint: true },
+      { count: Math.round(90 * (highQuality ? 1 : 0.7)), radius: 100, size: 1.3, brightness: 1.0, glint: true },
       { count: Math.round(700 * q), radius: 104, size: 0.6, brightness: 0.95, glint: false },
       { count: Math.round(4200 * q), radius: 112, size: 0.38, brightness: 0.8, glint: false },
       { count: Math.round(9000 * q), radius: 120, size: 0.22, brightness: 0.62, glint: false },
@@ -169,6 +175,7 @@ function Stars({ highQuality }: { highQuality: boolean }) {
             sizeAttenuation
             depthWrite={false}
             blending={THREE.AdditiveBlending}
+            toneMapped={false}
             fog={false}
           />
         </points>

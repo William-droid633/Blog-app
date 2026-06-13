@@ -808,17 +808,17 @@ export function nebulaSkyTexture(width = 1536, height = 768): THREE.CanvasTextur
   // Palette relevée sur la photographie : du noir spatial aux émissions
   // chaudes (rouge Hα → orange → tan → crêtes crème), poussières sombres,
   // régions de réflexion bleues et un soupçon d'émission rosée.
-  const space = hexToRgb("#04050c"); // fond spatial profond
-  const warmDeep = hexToRgb("#241405"); // lueur brune des "vides"
-  const ember = hexToRgb("#7a2f17"); // émission rouge profonde
-  const orange = hexToRgb("#bf6a2f"); // gaz chaud
-  const tan = hexToRgb("#d99a5e"); // nappes éclairées
-  const cream = hexToRgb("#f3d6a4"); // crêtes les plus vives
-  const dust = hexToRgb("#160d07"); // voies de poussière sombres
+  const space = hexToRgb("#03040a"); // fond spatial profond
+  const warmDeep = hexToRgb("#2a1808"); // lueur brune des "vides"
+  const ember = hexToRgb("#7e3015"); // émission rouge profonde
+  const orange = hexToRgb("#c46a2c"); // gaz chaud
+  const tan = hexToRgb("#e2a05f"); // nappes éclairées
+  const cream = hexToRgb("#f7dca6"); // crêtes les plus vives
+  const dust = hexToRgb("#120a05"); // voies de poussière sombres
   const pinkEmis = hexToRgb("#7c3f63"); // émission rosée discrète
-  const topHaze = hexToRgb("#26375a"); // voile bleuté du haut
-  const blueReflect = hexToRgb("#41618c"); // halo bleu de réflexion
-  const blueBright = hexToRgb("#c2d8f4"); // noyaux lumineux bleus
+  const topHaze = hexToRgb("#243454"); // léger voile froid du haut
+  const blueReflect = hexToRgb("#4a6e9c"); // halo bleu de réflexion
+  const blueBright = hexToRgb("#cfe0f6"); // noyau lumineux bleu
 
   const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
@@ -830,8 +830,8 @@ export function nebulaSkyTexture(width = 1536, height = 768): THREE.CanvasTextur
       // Déformation du domaine : tord les nappes en volutes turbulentes.
       const wx = fbm(u * 2 + 3.1, v * 2 + 1.7, 4) - 0.5;
       const wy = fbm(u * 2 + 8.3, v * 2 + 5.2, 4) - 0.5;
-      const su = u + wx * 0.32;
-      const sv = v + wy * 0.32;
+      const su = u + wx * 0.34;
+      const sv = v + wy * 0.34;
 
       // Densité de gaz multi-échelle (grandes masses → grain fin).
       const big = fbm(su * 5 + 21, sv * 5 + 7, 6);
@@ -841,41 +841,48 @@ export function nebulaSkyTexture(width = 1536, height = 768): THREE.CanvasTextur
 
       // Filaments lumineux et veines de poussière : crêtes de bruit « ridé »
       // (là où la turbulence est minimale) → tendons fins, pas des taches.
-      const filament = Math.pow(Math.max(0, 1 - turbulence(su * 15 + 5, sv * 15 + 2, 5) * 1.2), 2.3);
-      const dustRidge = Math.pow(Math.max(0, 1 - turbulence(su * 19 + 31, sv * 19 + 13, 5) * 1.15), 2.6);
+      const filament = Math.pow(Math.max(0, 1 - turbulence(su * 15 + 5, sv * 15 + 2, 5) * 1.2), 2.2);
+      const dustRidge = Math.pow(Math.max(0, 1 - turbulence(su * 19 + 31, sv * 19 + 13, 5) * 1.15), 2.4);
 
-      // Enveloppe verticale : dense en bande mi-haute, jamais tout à fait nulle.
-      const vWin = Math.max(0.32, Math.min(1, 1.2 - Math.abs(v - 0.4) * 1.0));
-      const warm = clamp01((density - 0.42) * 2.1) * vWin;
+      // Enveloppe verticale : nébuleuse chaude présente sur tout le ciel.
+      const vWin = Math.max(0.42, Math.min(1, 1.22 - Math.abs(v - 0.42) * 0.9));
+      const warm = clamp01((density - 0.4) * 2.4) * vWin;
 
-      // Empilement des émissions chaudes, du fond brun aux crêtes crème.
-      let c = mix(space, warmDeep, clamp01(0.25 + density * 0.7) * vWin * 0.7);
-      c = mix(c, ember, warm * 0.55);
-      c = mix(c, orange, clamp01(warm * (0.4 + mid)) * 0.85);
-      c = mix(c, tan, clamp01(warm * (0.3 + filament)));
-      c = mix(c, cream, clamp01((warm * filament - 0.35) * 2.2));
-      c = mix(c, pinkEmis, clamp01((warm - 0.6) * 1.2) * 0.22);
-      // Poussières sombres qui découpent le gaz en veines nettes.
-      c = mix(c, dust, Math.min(0.82, clamp01(dustRidge - 0.15) * (0.4 + warm) * 1.1));
+      // Empilement des émissions chaudes : fond brun visible partout, puis
+      // rouge → orange → tan → crêtes crème là où le gaz se densifie.
+      let c = mix(space, warmDeep, clamp01(0.32 + density * 0.85) * vWin * 0.9);
+      c = mix(c, ember, warm * 0.6);
+      c = mix(c, orange, clamp01(warm * (0.45 + mid)) * 0.95);
+      c = mix(c, tan, clamp01(warm * (0.35 + filament)));
+      c = mix(c, cream, clamp01((warm * filament - 0.3) * 2.4));
+      c = mix(c, pinkEmis, clamp01((warm - 0.6) * 1.2) * 0.2);
+      // Poussières sombres : veines nettes qui découpent le gaz.
+      c = mix(c, dust, Math.min(0.85, clamp01(dustRidge - 0.12) * (0.4 + warm) * 1.25));
 
-      // Voile bleuté froid vers le haut du ciel.
-      const topAmt = Math.max(0, 0.32 - v) * 1.4 * (0.4 + 0.6 * big);
-      c = mix(c, topHaze, Math.min(0.45, topAmt));
+      // Très léger voile froid tout en haut du ciel seulement.
+      const topAmt = Math.max(0, 0.22 - v) * 1.2 * (0.3 + 0.5 * big);
+      c = mix(c, topHaze, Math.min(0.18, topAmt));
 
-      // Réflexion bleue : grand cœur calé sur la vue par défaut (−Z, le
-      // temple) + une seconde tache plus petite et discrète, pour varier.
-      let dau = Math.abs(u - 0.75);
+      // Cœur de réflexion bleu : knot lumineux LOCALISÉ, légèrement décentré,
+      // calé vers la vue par défaut (−Z, le temple). Volontairement petit et
+      // modéré, pour ne pas saturer en un halo de bloom géant.
+      let dau = Math.abs(u - 0.72);
       if (dau > 0.5) dau = 1 - dau;
-      const gx = (dau - wx * 0.06) / 0.17;
-      const gy = (v - 0.4) / 0.18;
-      const core1 = Math.exp(-(gx * gx + gy * gy)) * (0.5 + 0.9 * big);
-      let dau2 = Math.abs(u - 0.3);
+      const gx = (dau - wx * 0.04) / 0.05;
+      const gy = (v - 0.43) / 0.07;
+      const core1 = Math.exp(-(gx * gx + gy * gy)) * (0.6 + 0.5 * big);
+      // Petite tache secondaire discrète, hors de la vue principale.
+      let dau2 = Math.abs(u - 0.26);
       if (dau2 > 0.5) dau2 = 1 - dau2;
-      const gx2 = dau2 / 0.1;
-      const gy2 = (v - 0.5) / 0.12;
-      const core2 = Math.exp(-(gx2 * gx2 + gy2 * gy2)) * (0.4 + 0.8 * mid) * 0.5;
-      c = mix(c, blueReflect, Math.min(0.8, Math.max(core1, core2) * 1.1));
-      const glow = Math.pow(core1, 2) * 0.85 + Math.pow(core2, 2) * 0.4;
+      const gx2 = dau2 / 0.06;
+      const gy2 = (v - 0.5) / 0.08;
+      const core2 = Math.exp(-(gx2 * gx2 + gy2 * gy2)) * (0.35 + 0.5 * mid) * 0.45;
+      c = mix(c, blueReflect, Math.min(0.68, Math.max(core1, core2)));
+      // Petit noyau vif au centre du cœur : il pétille (et prend un soupçon
+      // de bloom) sans étaler un grand halo.
+      const nucleus = Math.exp(-(Math.pow(dau / 0.02, 2) + Math.pow((v - 0.43) / 0.028, 2)));
+      const glow =
+        Math.pow(core1, 2.2) * 0.55 + Math.pow(core2, 2.2) * 0.25 + nucleus * (0.5 + 0.4 * big);
       c = {
         r: c.r + blueBright.r * glow,
         g: c.g + blueBright.g * glow,
