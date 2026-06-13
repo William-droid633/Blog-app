@@ -6,17 +6,18 @@ import * as THREE from "three";
 import { gaussian, softParticleTexture } from "./textures";
 
 /**
- * Galaxie spirale en vraies particules (~80 000 étoiles) suspendue dans
- * le ciel derrière le temple : cinq bras enroulés, bulbe central chaud,
- * dispersion gaussienne (dense au cœur, diffuse en lisière), nuances de
- * couleur du cœur doré aux bras bleutés piqués de nébuleuses roses.
- * Points ronds additifs à bord fondu — le bloom de la scène fait briller
- * le cœur naturellement. Très lente rotation autour de son axe.
+ * Voie lactée enveloppante : on n'observe plus une petite spirale lointaine,
+ * on se tient À L'INTÉRIEUR du disque galactique. La structure est un grand
+ * disque spiral (cinq bras, bulbe chaud) déployé très haut et tout autour du
+ * temple, dont la bande lumineuse balaie le ciel d'un horizon à l'autre. Avec
+ * ~30 000 étoiles concentrées dans une bande fine (et un champ d'étoiles
+ * d'appoint omnidirectionnel côté FacadeScene), le ciel reste dense partout.
+ * Points ronds additifs : le bloom de la scène fait briller le cœur.
  */
 
-const RADIUS = 46;
+const RADIUS = 150;
 const BRANCHES = 5;
-const SPIN = 4.4; // enroulement total (radians) du centre au bord
+const SPIN = 3.2; // enroulement total (radians) du centre au bord
 const CORE = new THREE.Color("#ffd9a4");
 const ARM = new THREE.Color("#5d7fce");
 const NEBULA = new THREE.Color("#c87fb4");
@@ -25,34 +26,35 @@ const BULGE = new THREE.Color("#fff1d6");
 function buildGalaxy(count: number): { positions: Float32Array; colors: Float32Array } {
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const bulgeCount = Math.floor(count * 0.14);
+  const bulgeCount = Math.floor(count * 0.13);
   const tint = new THREE.Color();
 
   for (let i = 0; i < count; i++) {
     const i3 = i * 3;
 
     if (i < bulgeCount) {
-      // Bulbe central : amas sphérique légèrement aplati
-      const r = Math.abs(gaussian()) * RADIUS * 0.07;
+      // Bulbe central : amas sphérique légèrement aplati, dense et brillant
+      const r = Math.abs(gaussian()) * RADIUS * 0.06;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       positions[i3] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i3 + 1] = r * Math.cos(phi) * 0.55;
+      positions[i3 + 1] = r * Math.cos(phi) * 0.5;
       positions[i3 + 2] = r * Math.sin(phi) * Math.sin(theta);
 
-      const brightness = 0.7 + Math.random() * 0.3;
+      const brightness = 0.75 + Math.random() * 0.25;
       tint.copy(BULGE).lerp(CORE, Math.random() * 0.6).multiplyScalar(brightness);
     } else {
-      // Disque spiral : densité décroissante vers le bord
-      const rNorm = Math.pow(Math.random(), 1.55);
+      // Disque spiral : densité décroissante vers le bord (biais central)
+      const rNorm = Math.pow(Math.random(), 1.5);
       const radius = rNorm * RADIUS;
       const branchAngle = ((i % BRANCHES) / BRANCHES) * Math.PI * 2;
       const spinAngle = rNorm * SPIN;
 
-      // Dispersion qui s'évase vers l'extérieur ; disque fin en lisière
-      const spread = (0.16 + rNorm * 0.5) * RADIUS * 0.075;
+      // Dispersion latérale qui s'évase vers l'extérieur ; disque TRÈS fin
+      // sur l'axe vertical → bande nette plutôt qu'une bouillie diffuse.
+      const spread = (0.16 + rNorm * 0.42) * RADIUS * 0.06;
       const rx = gaussian() * spread;
-      const ry = gaussian() * (1 - rNorm * 0.72) * RADIUS * 0.03;
+      const ry = gaussian() * (1 - rNorm * 0.7) * RADIUS * 0.018;
       const rz = gaussian() * spread;
 
       positions[i3] = Math.cos(branchAngle + spinAngle) * radius + rx;
@@ -60,11 +62,11 @@ function buildGalaxy(count: number): { positions: Float32Array; colors: Float32A
       positions[i3 + 2] = Math.sin(branchAngle + spinAngle) * radius + rz;
 
       tint.copy(CORE).lerp(ARM, Math.min(1, rNorm * 1.15));
-      // Quelques régions de formation d'étoiles rosées sur les bras
-      if (rNorm > 0.25 && rNorm < 0.85 && Math.random() < 0.07) {
+      // Régions de formation d'étoiles rosées sur les bras
+      if (rNorm > 0.22 && rNorm < 0.85 && Math.random() < 0.08) {
         tint.lerp(NEBULA, 0.55);
       }
-      const brightness = 0.4 + Math.pow(Math.random(), 2) * 0.6;
+      const brightness = 0.45 + Math.pow(Math.random(), 2) * 0.55;
       tint.multiplyScalar(brightness);
     }
 
@@ -76,29 +78,31 @@ function buildGalaxy(count: number): { positions: Float32Array; colors: Float32A
   return { positions, colors };
 }
 
-export default function Galaxy({ count = 80000 }: { count?: number }) {
+export default function Galaxy({ count = 30000 }: { count?: number }) {
   const points = useRef<THREE.Points>(null);
   const sprite = useMemo(() => softParticleTexture(), []);
   const { positions, colors } = useMemo(() => buildGalaxy(count), [count]);
 
   useFrame((_, delta) => {
-    if (points.current) points.current.rotation.y += delta * 0.012;
+    if (points.current) points.current.rotation.y += delta * 0.008;
   });
 
   return (
-    // Inclinée en oblique dans le ciel : on voit la spirale en perspective
-    <group position={[-26, 56, -118]} rotation={[1.02, 0.05, -0.42]}>
+    // Disque déployé très haut et centré sur la scène : on se trouve dans son
+    // plan, près du bord ; la bande lumineuse passe au-dessus du temple, le
+    // cœur doré brillant à l'aplomb. Légèrement basculé pour la perspective.
+    <group position={[0, 96, 4]} rotation={[0.4, 0.15, -0.35]}>
       <points ref={points} renderOrder={-1}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[colors, 3]} />
         </bufferGeometry>
         <pointsMaterial
-          size={0.5}
+          size={1.05}
           map={sprite}
           vertexColors
           transparent
-          opacity={0.9}
+          opacity={0.92}
           alphaTest={0.001}
           sizeAttenuation
           depthWrite={false}

@@ -101,10 +101,12 @@ function Blob({
   );
 }
 
-/** Champ d'étoiles sur deux strates (proches plus vives, lointaines ténues). */
+/** Champ d'étoiles d'appoint sur deux strates, omnidirectionnel : comble
+ *  tout le ciel autour de la bande galactique pour qu'aucune direction ne
+ *  paraisse vide. */
 function Stars() {
-  const near = useMemo(() => starPositions(1100, 96), []);
-  const far = useMemo(() => starPositions(1700, 122), []);
+  const near = useMemo(() => starPositions(1600, 96), []);
+  const far = useMemo(() => starPositions(2600, 122), []);
   const sprite = useMemo(() => softParticleTexture(), []);
   return (
     <group>
@@ -1127,7 +1129,7 @@ export default function FacadeScene({
       <color attach="background" args={["#05070f"]} />
       <fog attach="fog" args={["#0c0b16", 32, 115]} />
       <SkyDome />
-      <Galaxy count={highQuality ? 80000 : 24000} />
+      <Galaxy count={30000} />
 
       {/* Réflexions d'environnement nocturne (procédural, sans réseau) */}
       <Environment resolution={64} frames={1}>
