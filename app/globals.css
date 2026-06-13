@@ -222,6 +222,152 @@ html {
 }
 
 /* ============================================================
+   Lecture d'article — page chaleureuse, claire et sobre.
+   Surcouche posée sur .rich-text, sans toucher à l'éditeur.
+   ============================================================ */
+
+.article-read {
+  background: #f6efe2;
+  color: #3a2e22;
+}
+
+.article-read .rich-text {
+  font-size: 1.2rem;
+  line-height: 1.85;
+  color: #3a2e22;
+}
+
+.article-read .rich-text > * + * {
+  margin-top: 1.15em;
+}
+
+.article-read .rich-text h1,
+.article-read .rich-text h2,
+.article-read .rich-text h3 {
+  @apply font-accent;
+  color: #2a2017;
+  letter-spacing: -0.01em;
+}
+
+.article-read .rich-text h2 {
+  font-size: 2.1rem;
+  margin-top: 1.7em;
+}
+
+.article-read .rich-text h3 {
+  font-size: 1.55rem;
+  margin-top: 1.35em;
+}
+
+.article-read .rich-text a {
+  color: #a65f2a;
+  text-decoration-color: rgba(166, 95, 42, 0.4);
+  text-underline-offset: 3px;
+}
+
+.article-read .rich-text a:hover {
+  color: #7c4319;
+}
+
+.article-read .rich-text blockquote {
+  border-left: 3px solid #c98a4b;
+  background: transparent;
+  color: #6a513a;
+  font-family: var(--font-accent);
+  font-style: italic;
+  font-size: 1.45rem;
+  line-height: 1.5;
+  padding: 0.1em 0 0.1em 1.4em;
+  margin: 1.7em 0;
+  border-radius: 0;
+}
+
+.article-read .rich-text hr {
+  border: none;
+  width: 34%;
+  height: 1px;
+  margin: 2.8em auto;
+  background: linear-gradient(to right, transparent, #c98a4b 50%, transparent);
+  position: relative;
+  overflow: visible;
+}
+
+.article-read .rich-text hr::after {
+  content: "❖";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #c98a4b;
+  background: #f6efe2;
+  padding: 0 0.5em;
+  font-size: 0.8rem;
+}
+
+/* Lettrine sobre sur le premier paragraphe */
+.article-read .rich-text > p:first-of-type::first-letter {
+  @apply font-accent;
+  color: #a65f2a;
+  float: left;
+  font-size: 3.4em;
+  font-weight: 600;
+  line-height: 0.78;
+  padding-right: 0.1em;
+  padding-top: 0.04em;
+}
+
+/* ——— Images : cadre doux, légende, débord, agrandissement ——— */
+.article-read figure {
+  margin: 2.4em 0;
+}
+
+.article-read figure img,
+.article-read .rich-text img {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 0;
+  border-radius: 6px;
+  box-shadow: 0 26px 64px -30px rgba(58, 46, 34, 0.6);
+  cursor: zoom-in;
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s;
+}
+
+.article-read figure img:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 34px 80px -30px rgba(58, 46, 34, 0.66);
+}
+
+.article-read figcaption {
+  margin-top: 0.8em;
+  text-align: center;
+  font-family: var(--font-accent);
+  font-style: italic;
+  font-size: 1.02rem;
+  color: #8a7355;
+}
+
+/* Images élargies au-delà de la colonne de texte sur grand écran */
+@media (min-width: 1024px) {
+  .article-read figure.bleed {
+    margin-inline: -4rem;
+  }
+}
+
+/* Révélation douce des blocs au défilement */
+.article-read .r-rise {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
+.article-read .r-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ============================================================
    Spécifique à l'éditeur Tiptap (admin, fond clair)
    ============================================================ */
 
