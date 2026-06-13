@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -24,7 +24,6 @@ import {
   Bold,
   Code,
   Highlighter,
-  ImagePlus,
   Italic,
   Link2,
   List,
@@ -39,29 +38,41 @@ import {
   Underline as UnderlineIcon,
   Undo2,
   Unlink,
-  Youtube as YoutubeIcon,
 } from "lucide-react";
 import { FontSize } from "@/lib/tiptap/font-size";
 import { ResizableImage } from "@/lib/tiptap/resizable-image";
-import { compressImage } from "@/lib/compress-image";
-import { uploadImage } from "@/lib/upload-image";
 
 const FONT_FAMILIES = [
   { label: "Police par défaut", value: "" },
-  { label: "Georgia (serif classique)", value: "Georgia, serif" },
-  { label: "Arial (sans-serif moderne)", value: "Arial, Helvetica, sans-serif" },
-  { label: "Courier New (monospace)", value: "'Courier New', Courier, monospace" },
-  { label: "Comic Sans (manuscrite)", value: "'Comic Sans MS', 'Segoe Script', cursive" },
-  { label: "Impact (display)", value: "Impact, 'Arial Black', sans-serif" },
-  { label: "Palatino (élégante, style du site)", value: "Palatino, 'Palatino Linotype', 'Book Antiqua', serif" },
+  { label: "Cinzel — titres romains", value: "var(--font-display), Georgia, serif" },
+  { label: "Cormorant — élégante", value: "var(--font-accent), Georgia, serif" },
+  { label: "Lora — lecture", value: "var(--font-serif), Georgia, serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Times New Roman", value: "'Times New Roman', Times, serif" },
+  { label: "Garamond", value: "Garamond, 'EB Garamond', 'Times New Roman', serif" },
+  { label: "Palatino", value: "Palatino, 'Palatino Linotype', 'Book Antiqua', serif" },
+  { label: "Arial", value: "Arial, Helvetica, sans-serif" },
+  { label: "Helvetica", value: "Helvetica, Arial, sans-serif" },
+  { label: "Verdana", value: "Verdana, Geneva, sans-serif" },
+  { label: "Trebuchet MS", value: "'Trebuchet MS', Helvetica, sans-serif" },
+  { label: "Tahoma", value: "Tahoma, Geneva, sans-serif" },
+  { label: "Courier New — mono", value: "'Courier New', Courier, monospace" },
+  { label: "Brush Script — manuscrite", value: "'Brush Script MT', 'Segoe Script', cursive" },
+  { label: "Impact — display", value: "Impact, 'Arial Black', sans-serif" },
 ];
 
 const FONT_SIZES = [
-  { label: "Taille normale", value: "" },
-  { label: "Petite (12px)", value: "12px" },
-  { label: "Normale (16px)", value: "16px" },
-  { label: "Grande (20px)", value: "20px" },
-  { label: "Très grande (24px)", value: "24px" },
+  { label: "Taille", value: "" },
+  { label: "12", value: "12px" },
+  { label: "14", value: "14px" },
+  { label: "16", value: "16px" },
+  { label: "18", value: "18px" },
+  { label: "20", value: "20px" },
+  { label: "24", value: "24px" },
+  { label: "28", value: "28px" },
+  { label: "32", value: "32px" },
+  { label: "40", value: "40px" },
+  { label: "48", value: "48px" },
 ];
 
 const IMAGE_WIDTHS = ["25%", "50%", "75%", "100%"];
@@ -103,9 +114,6 @@ function Divider() {
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-
   const currentHeading = editor.isActive("heading", { level: 1 })
     ? "h1"
     : editor.isActive("heading", { level: 2 })
@@ -141,38 +149,6 @@ function Toolbar({ editor }: { editor: Editor }) {
     const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
     editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
   }, [editor]);
-
-  const addYoutube = useCallback(() => {
-    const url = window.prompt(
-      "Collez l’adresse de la vidéo YouTube (ex : https://www.youtube.com/watch?v=…)"
-    );
-    if (!url) {
-      return;
-    }
-    editor.chain().focus().setYoutubeVideo({ src: url }).run();
-  }, [editor]);
-
-  const handleImageSelected = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) {
-      return;
-    }
-    setUploadingImage(true);
-    try {
-      const compressed = await compressImage(file);
-      const url = await uploadImage(compressed, "content");
-      editor.chain().focus().setImage({ src: url }).run();
-    } catch {
-      window.alert(
-        "L’envoi de l’image a échoué. Vérifiez votre connexion et réessayez."
-      );
-    } finally {
-      setUploadingImage(false);
-    }
-  };
 
   const textColor =
     (editor.getAttributes("textStyle").color as string | undefined) ?? "#3e2f23";
@@ -227,7 +203,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         aria-label="Famille de police"
       >
         {FONT_FAMILIES.map((font) => (
-          <option key={font.label} value={font.value}>
+          <option key={font.label} value={font.value} style={{ fontFamily: font.value || undefined }}>
             {font.label}
           </option>
         ))}
@@ -407,31 +383,6 @@ function Toolbar({ editor }: { editor: Editor }) {
         <Unlink size={18} />
       </ToolbarButton>
 
-      {/* Image */}
-      <ToolbarButton
-        onClick={() => imageInputRef.current?.click()}
-        disabled={uploadingImage}
-        label="Insérer une image"
-      >
-        {uploadingImage ? (
-          <Loader2 size={18} className="animate-spin" />
-        ) : (
-          <ImagePlus size={18} />
-        )}
-      </ToolbarButton>
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleImageSelected}
-        className="hidden"
-      />
-
-      {/* YouTube */}
-      <ToolbarButton onClick={addYoutube} label="Insérer une vidéo YouTube">
-        <YoutubeIcon size={18} />
-      </ToolbarButton>
-
       <Divider />
 
       {/* Citation, séparateur, tableau */}
@@ -525,9 +476,12 @@ function Toolbar({ editor }: { editor: Editor }) {
 export default function TiptapEditor({
   content,
   onChange,
+  onReady,
 }: {
   content: string;
   onChange: (html: string) => void;
+  /** Expose l'instance de l'éditeur au parent (panneau médias séparé). */
+  onReady?: (editor: Editor | null) => void;
 }) {
   const editor = useEditor({
     immediatelyRender: false,
@@ -575,6 +529,12 @@ export default function TiptapEditor({
       onChange(editor.getHTML());
     },
   });
+
+  // Expose l'éditeur au parent (et le retire au démontage)
+  useEffect(() => {
+    onReady?.(editor ?? null);
+    return () => onReady?.(null);
+  }, [editor, onReady]);
 
   // Libère l'éditeur quand le composant est démonté
   useEffect(() => {

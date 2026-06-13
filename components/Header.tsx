@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SITE_NAME } from "@/lib/config";
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -13,6 +15,12 @@ export default function Header() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // L'espace d'administration possède sa propre barre : on masque l'en-tête
+  // public sur toutes ses pages.
+  if (pathname?.startsWith("/admin")) {
+    return null;
+  }
 
   return (
     <header
@@ -46,12 +54,6 @@ export default function Header() {
             className="relative px-3 py-2.5 text-parchment/60 transition-colors after:absolute after:bottom-1 after:left-3 after:right-3 after:h-px after:origin-left after:scale-x-0 after:bg-gold after:transition-transform after:duration-300 hover:text-goldlight hover:after:scale-x-100"
           >
             Musée
-          </Link>
-          <Link
-            href="/admin"
-            className="relative px-3 py-2.5 text-parchment/60 transition-colors after:absolute after:bottom-1 after:left-3 after:right-3 after:h-px after:origin-left after:scale-x-0 after:bg-gold after:transition-transform after:duration-300 hover:text-goldlight hover:after:scale-x-100"
-          >
-            Admin
           </Link>
         </nav>
       </div>

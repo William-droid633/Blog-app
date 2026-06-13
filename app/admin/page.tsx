@@ -71,13 +71,23 @@ export default function AdminDashboard() {
     setBusyId(null);
   };
 
+  const subtitle =
+    posts === null
+      ? "Chargement…"
+      : posts.length === 0
+        ? "Aucun article pour l’instant"
+        : `${posts.length} article${posts.length > 1 ? "s" : ""} · ${
+            posts.filter((p) => p.published).length
+          } publié${posts.filter((p) => p.published).length > 1 ? "s" : ""}`;
+
   return (
     <AdminLayout
       title="Tableau de bord"
+      subtitle={subtitle}
       actions={
         <Link
           href="/admin/nouveau"
-          className="flex items-center gap-2 rounded-lg bg-bark px-4 py-2.5 text-sm font-semibold text-cream transition-colors hover:bg-chestnut"
+          className="flex items-center gap-2 rounded-lg bg-bark px-4 py-2.5 text-sm font-semibold text-cream shadow-sm transition-colors hover:bg-chestnut"
         >
           <Plus size={16} />
           Nouvel article
@@ -112,7 +122,7 @@ export default function AdminDashboard() {
           {posts.map((post) => (
             <li
               key={post.id}
-              className="flex flex-col gap-3 rounded-xl border border-latte bg-white p-4 sm:flex-row sm:items-center"
+              className="flex flex-col gap-3 rounded-xl border border-latte bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-center"
             >
               {post.cover_image ? (
                 // eslint-disable-next-line @next/next/no-img-element

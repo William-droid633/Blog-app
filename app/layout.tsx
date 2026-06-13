@@ -1,9 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Cinzel, Cormorant_Garamond, Lora, Space_Grotesk } from "next/font/google";
 import Header from "@/components/Header";
-import Meander from "@/components/roman/Meander";
+import Footer from "@/components/Footer";
 import { SITE_NAME, SITE_DESCRIPTION } from "@/lib/config";
-import { toRoman } from "@/lib/roman";
 import "./globals.css";
 
 const cinzel = Cinzel({
@@ -50,8 +49,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const year = new Date().getFullYear();
-
   return (
     <html lang="fr" className="scroll-smooth">
       <body
@@ -59,37 +56,7 @@ export default function RootLayout({
       >
         <Header />
         <main className="flex flex-1 flex-col">{children}</main>
-
-        <footer className="relative border-t border-gold/20 bg-night">
-          <Meander className="absolute -top-2 left-0 opacity-50" />
-          <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 px-4 pb-10 pt-14 text-center">
-            {/* Façade de temple stylisée */}
-            <div className="flex h-14 items-end gap-5 opacity-35" aria-hidden="true">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex h-full w-3 flex-col items-center">
-                  <div className="h-1 w-4 bg-stone" />
-                  <div
-                    className="w-2.5 flex-1"
-                    style={{
-                      background:
-                        "repeating-linear-gradient(90deg, #cfc8b6 0 2px, #8f8773 2px 3px)",
-                    }}
-                  />
-                  <div className="h-1 w-4 bg-stone" />
-                </div>
-              ))}
-            </div>
-            <p className="font-display text-2xl font-semibold tracking-inscription text-parchment">
-              {SITE_NAME.toUpperCase()}
-            </p>
-            <p className="text-[10px] uppercase tracking-widecaps text-gold/60">
-              MVSEVM · PERSONALE
-            </p>
-            <p className="text-xs text-parchment/35">
-              © {year} {SITE_NAME} · {toRoman(year)} · Tous droits réservés
-            </p>
-          </div>
-        </footer>
+        <Footer />
       </body>
     </html>
   );

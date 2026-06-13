@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type Editor } from "@tiptap/react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import AdminLayout from "@/components/AdminLayout";
 import ImageUpload from "@/components/ImageUpload";
 import TiptapEditor from "@/components/TiptapEditor";
+import MediaPanel from "@/components/MediaPanel";
 import { createClient } from "@/lib/supabase-browser";
 import { slugify } from "@/lib/slugify";
 import type { Post } from "@/lib/types";
@@ -35,6 +37,7 @@ export default function PostForm({ initialPost }: Props) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editor, setEditor] = useState<Editor | null>(null);
 
   // Les refs permettent à l'auto-save de lire l'état le plus récent
   // sans recréer l'intervalle à chaque frappe.
@@ -227,57 +230,63 @@ export default function PostForm({ initialPost }: Props) {
           </p>
         )}
 
-        {/* Titre */}
-        <div>
-          <label
-            htmlFor="post-title"
-            className="mb-1.5 block text-sm font-semibold text-mocha"
-          >
-            Titre
-          </label>
-          <input
-            id="post-title"
-            type="text"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              markDirty();
-            }}
-            placeholder="Le titre de votre article"
-            className="w-full rounded-xl border border-latte bg-white px-4 py-3 font-display text-xl font-bold text-ink outline-none transition-colors placeholder:font-body placeholder:text-base placeholder:font-normal placeholder:text-mocha/50 focus:border-caramel"
-          />
-        </div>
+        {/* Titre + couverture */}
+        <section className="rounded-2xl border border-latte bg-white p-5 shadow-sm sm:p-6">
+          <div>
+            <label
+              htmlFor="post-title"
+              className="mb-1.5 block text-sm font-semibold text-mocha"
+            >
+              Titre
+            </label>
+            <input
+              id="post-title"
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                markDirty();
+              }}
+              placeholder="Le titre de votre article"
+              className="w-full rounded-xl border border-latte bg-cream/40 px-4 py-3 font-display text-xl font-bold text-ink outline-none transition-colors placeholder:font-body placeholder:text-base placeholder:font-normal placeholder:text-mocha/50 focus:border-caramel focus:bg-white"
+            />
+          </div>
 
-        {/* Image de couverture */}
-        <div>
-          <span className="mb-1.5 block text-sm font-semibold text-mocha">
-            Image de couverture
-          </span>
-          <ImageUpload
-            value={coverImage}
-            onChange={(url) => {
-              setCoverImage(url);
-              markDirty();
-            }}
-          />
-        </div>
+          <div className="mt-5">
+            <span className="mb-1.5 block text-sm font-semibold text-mocha">
+              Image de couverture
+            </span>
+            <ImageUpload
+              value={coverImage}
+              onChange={(url) => {
+                setCoverImage(url);
+                markDirty();
+              }}
+            />
+          </div>
+        </section>
 
-        {/* Contenu */}
-        <div>
-          <span className="mb-1.5 block text-sm font-semibold text-mocha">
+        {/* Contenu : éditeur de texte */}
+        <section>
+          <h2 className="mb-2.5 flex items-baseline gap-2 px-1 text-sm font-semibold text-chestnut">
             Contenu de l’article
-          </span>
+            <span className="text-xs font-normal text-mocha">— mise en forme du texte</span>
+          </h2>
           <TiptapEditor
             content={content ?? ""}
             onChange={(html) => {
               setContent(html);
               markDirty();
             }}
+            onReady={setEditor}
           />
-        </div>
+        </section>
+
+        {/* Encadré médias, distinct de l'édition du texte */}
+        <MediaPanel editor={editor} />
 
         {/* Notes privées */}
-        <div>
+        <section className="rounded-2xl border border-latte bg-white p-5 shadow-sm sm:p-6">
           <label
             htmlFor="post-notes"
             className="mb-1.5 block text-sm font-semibold text-mocha"
@@ -298,7 +307,7 @@ export default function PostForm({ initialPost }: Props) {
             placeholder="Vos idées, rappels et brouillons mentaux pour cet article…"
             className="w-full rounded-xl border border-latte bg-sand/40 px-4 py-3 text-sm text-ink outline-none transition-colors placeholder:text-mocha/50 focus:border-caramel"
           />
-        </div>
+        </section>
       </div>
     </AdminLayout>
   );
