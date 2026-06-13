@@ -268,7 +268,13 @@ export default function Museum3D({
         dpr={highQuality ? [1, 2] : [1, 1.5]}
         gl={{ antialias: true }}
         camera={{ position: [0, 2.1, 25], fov: 58 }}
-        onCreated={() => setReady(true)}
+        onCreated={(state) => {
+          // Légère surexposition globale : rend le temple et l'extérieur plus
+          // lisibles de jour (écran en pleine lumière), sans toucher au ciel
+          // (nébuleuse et étoiles sont en toneMapped={false}).
+          state.gl.toneMappingExposure = 1.3;
+          setReady(true);
+        }}
         onPointerMissed={() => {
           setFocus((current) => (current && !current.diving ? null : current));
         }}
