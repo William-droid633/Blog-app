@@ -2,12 +2,11 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useLoader } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { formatDate } from "@/lib/format-date";
 import { toRoman } from "@/lib/roman";
 import type { Post } from "@/lib/types";
-import { placeholderArtTexture } from "./textures";
+import { placeholderArtTexture, cartelTexture, softParticleTexture } from "./textures";
 
 /* — Dimensions des œuvres — */
 export const ART_WIDTH = 2.6;
@@ -39,7 +38,7 @@ function LoadedArt({ url }: { url: string }) {
   }, [texture]);
 
   return (
-    <mesh position={[0, 0, 0.055]}>
+    <mesh position={[0, 0, 0.075]}>
       <planeGeometry args={[ART_WIDTH - 0.16, ART_HEIGHT - 0.16]} />
       <meshBasicMaterial map={texture} toneMapped={false} />
     </mesh>
@@ -49,7 +48,7 @@ function LoadedArt({ url }: { url: string }) {
 function PlaceholderArt({ title }: { title: string }) {
   const texture = useMemo(() => placeholderArtTexture(title), [title]);
   return (
-    <mesh position={[0, 0, 0.055]}>
+    <mesh position={[0, 0, 0.075]}>
       <planeGeometry args={[ART_WIDTH - 0.16, ART_HEIGHT - 0.16]} />
       <meshBasicMaterial map={texture} toneMapped={false} />
     </mesh>
@@ -58,10 +57,46 @@ function PlaceholderArt({ title }: { title: string }) {
 
 function ArtFallback() {
   return (
-    <mesh position={[0, 0, 0.055]}>
+    <mesh position={[0, 0, 0.075]}>
       <planeGeometry args={[ART_WIDTH - 0.16, ART_HEIGHT - 0.16]} />
       <meshBasicMaterial color="#1a1510" />
     </mesh>
+  );
+}
+
+/**
+ * Lampe de tableau en bronze : potence coudée discrète et capot
+ * cylindrique incliné vers la toile — à la place de l'ancien « tube noir »
+ * qui pointait comme une antenne.
+ */
+function PictureLight() {
+  const brass = <meshStandardMaterial color="#7a5e30" metalness={0.85} roughness={0.34} />;
+  const armY = ART_HEIGHT / 2 + 0.12;
+  return (
+    <group>
+      {/* Platine fixée au cadre */}
+      <mesh position={[0, armY - 0.05, 0.07]}>
+        <boxGeometry args={[0.3, 0.12, 0.06]} />
+        {brass}
+      </mesh>
+      {/* Potence coudée */}
+      <mesh position={[0, armY + 0.12, 0.16]} rotation={[0.62, 0, 0]}>
+        <cylinderGeometry args={[0.022, 0.022, 0.4, 10]} />
+        {brass}
+      </mesh>
+      {/* Capot cylindrique horizontal incliné vers la toile */}
+      <mesh position={[0, armY + 0.28, 0.34]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.07, 0.07, ART_WIDTH * 0.62, 16, 1, false, 0, Math.PI * 1.35]} />
+        {brass}
+      </mesh>
+      {/* Embouts du capot */}
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[s * ART_WIDTH * 0.31, armY + 0.28, 0.34]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.072, 0.072, 0.02, 16]} />
+          {brass}
+        </mesh>
+      ))}
+    </group>
   );
 }
 
@@ -77,23 +112,28 @@ export interface PaintingPlacement {
 }
 
 /**
- * Une œuvre accrochée au mur du couloir : cadre doré à double moulure,
- * marie-louise, toile (photo de couverture de l'article), faisceau de
- * lumière de musée et cartel gravé (titre + date).
+ * Une œuvre accrochée au mur du couloir : cadre doré sculpté à gorge et
+ * perles, marie-louise en pente, toile (image de couverture), lampe de
+ * tableau en bronze, halo lumineux doux (sans rectangle visible) et cartel
+ * gravé dans la scène WebGL.
  */
 export default function Painting({
   placement,
   focused,
   onSelect,
-  beam,
 }: {
   placement: PaintingPlacement;
   focused: boolean;
   onSelect: (index: number) => void;
-  beam: THREE.Texture;
 }) {
   const { post, index, number, position, rotationY } = placement;
   const [hovered, setHovered] = useState(false);
+
+  const glow = useMemo(() => softParticleTexture(), []);
+  const cartel = useMemo(
+    () => cartelTexture(toRoman(number), post.title, formatDate(post.created_at)),
+    [number, post.title, post.created_at]
+  );
 
   useEffect(() => {
     document.body.style.cursor = hovered ? "pointer" : "auto";
@@ -102,20 +142,31 @@ export default function Painting({
     };
   }, [hovered]);
 
+  const active = hovered || focused;
+
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
-      {/* Moulure extérieure bronze */}
-      <mesh position={[0, 0, -0.015]} castShadow>
-        <boxGeometry args={[ART_WIDTH + 0.6, ART_HEIGHT + 0.6, 0.05]} />
-        <meshStandardMaterial color="#5d4322" metalness={0.7} roughness={0.45} />
+      {/* Halo lumineux doux et rond projeté sur le mur derrière le cadre :
+          remplace l'ancien plan rectangulaire qui se voyait en transparence */}
+      <sprite position={[0, 0.1, -0.04]} scale={[ART_WIDTH + 2, ART_HEIGHT + 2, 1]}>
+        <spriteMaterial
+          map={glow}
+          color="#e8cd9c"
+          transparent
+          opacity={active ? 0.32 : 0.2}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </sprite>
+
+      {/* Caisse du cadre : gorge profonde bronze */}
+      <mesh position={[0, 0, -0.02]} castShadow>
+        <boxGeometry args={[ART_WIDTH + 0.56, ART_HEIGHT + 0.56, 0.12]} />
+        <meshStandardMaterial color="#4a3318" metalness={0.6} roughness={0.5} />
       </mesh>
-      {/* Filet doré intermédiaire */}
-      <mesh position={[0, 0, 0.01]}>
-        <boxGeometry args={[ART_WIDTH + 0.44, ART_HEIGHT + 0.44, 0.06]} />
-        <meshStandardMaterial color="#caa45e" metalness={0.85} roughness={0.25} />
-      </mesh>
-      {/* Cadre doré */}
+      {/* Plate-bande godronnée dorée */}
       <mesh
+        position={[0, 0, 0.03]}
         castShadow
         onClick={(event) => {
           event.stopPropagation();
@@ -128,15 +179,18 @@ export default function Painting({
         }}
         onPointerOut={() => setHovered(false)}
       >
-        <boxGeometry args={[ART_WIDTH + 0.3, ART_HEIGHT + 0.3, 0.09]} />
-        <meshStandardMaterial
-          color={hovered || focused ? "#d9b87a" : "#a8854a"}
-          metalness={0.78}
-          roughness={0.32}
-        />
+        <boxGeometry args={[ART_WIDTH + 0.42, ART_HEIGHT + 0.42, 0.13]} />
+        <meshStandardMaterial color={active ? "#dcb978" : "#b8924f"} metalness={0.82} roughness={0.3} />
       </mesh>
-      {/* Marie-louise */}
-      <mesh position={[0, 0, 0.048]}>
+      {/* Listel intérieur sombre */}
+      <mesh position={[0, 0, 0.07]}>
+        <boxGeometry args={[ART_WIDTH + 0.16, ART_HEIGHT + 0.16, 0.06]} />
+        <meshStandardMaterial color="#6b4f28" metalness={0.7} roughness={0.4} />
+      </mesh>
+      {/* Rang de perles doré au fil de la vue */}
+      <Beads active={active} />
+      {/* Marie-louise (carton biseauté clair) */}
+      <mesh position={[0, 0, 0.06]}>
         <planeGeometry args={[ART_WIDTH + 0.02, ART_HEIGHT + 0.02]} />
         <meshStandardMaterial color="#efe7d4" roughness={0.85} />
       </mesh>
@@ -150,75 +204,51 @@ export default function Painting({
         )}
       </Suspense>
 
-      {/* Lampe de tableau */}
-      <mesh position={[0, ART_HEIGHT / 2 + 0.34, 0.16]} rotation={[0.5, 0, 0]}>
-        <cylinderGeometry args={[0.035, 0.035, 0.7, 8]} />
-        <meshStandardMaterial color="#3d2f1d" metalness={0.8} roughness={0.35} />
-      </mesh>
-      {/* Faisceau lumineux */}
-      <mesh position={[0, 0.32, 0.22]}>
-        <planeGeometry args={[ART_WIDTH + 0.4, ART_HEIGHT + 1.1]} />
-        <meshBasicMaterial
-          map={beam}
-          transparent
-          opacity={focused ? 0.55 : 0.34}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </mesh>
+      <PictureLight />
 
-      {/* Cartel : titre de l'œuvre et date */}
-      <Html
-        transform
-        position={[0, -(ART_HEIGHT / 2) - 0.62, 0.06]}
-        scale={0.32}
-        style={{ pointerEvents: "none", userSelect: "none" }}
-      >
-        <div
-          style={{
-            width: "300px",
-            textAlign: "center",
-            background: "linear-gradient(170deg, #efe7d4, #d8cdb2)",
-            border: "1px solid #8a6a3c",
-            boxShadow: "0 6px 18px rgba(0,0,0,0.55)",
-            padding: "10px 14px 12px",
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "var(--font-display), Georgia, serif",
-              fontSize: "10px",
-              letterSpacing: "0.3em",
-              color: "#8a6a3c",
-            }}
-          >
-            ŒUVRE {toRoman(number)}
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-display), Georgia, serif",
-              fontWeight: 700,
-              fontSize: "17px",
-              lineHeight: 1.25,
-              color: "#2c2317",
-              marginTop: "4px",
-            }}
-          >
-            {post.title}
-          </div>
-          <div
-            style={{
-              fontFamily: "var(--font-accent), Georgia, serif",
-              fontStyle: "italic",
-              fontSize: "12px",
-              color: "#6f5a3a",
-              marginTop: "3px",
-            }}
-          >
-            {formatDate(post.created_at)}
-          </div>
-        </div>
-      </Html>
+      {/* Cartel gravé, plaqué sur le mur sous l'œuvre (dans le WebGL) */}
+      <group position={[0, -(ART_HEIGHT / 2) - 0.66, -0.02]}>
+        <mesh castShadow>
+          <boxGeometry args={[1.5, 0.94, 0.05]} />
+          <meshStandardMaterial color="#cdbf9f" roughness={0.8} />
+        </mesh>
+        <mesh position={[0, 0, 0.03]}>
+          <planeGeometry args={[1.42, 0.86]} />
+          <meshBasicMaterial map={cartel} transparent toneMapped={false} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+/** Rang de perles (boules dorées) au pourtour intérieur du cadre. */
+function Beads({ active }: { active: boolean }) {
+  const positions = useMemo(() => {
+    const list: Array<[number, number]> = [];
+    const halfW = (ART_WIDTH + 0.28) / 2;
+    const halfH = (ART_HEIGHT + 0.28) / 2;
+    const step = 0.1;
+    const nx = Math.floor((halfW * 2) / step);
+    const ny = Math.floor((halfH * 2) / step);
+    for (let i = 0; i <= nx; i++) {
+      const x = -halfW + (i / nx) * halfW * 2;
+      list.push([x, halfH], [x, -halfH]);
+    }
+    for (let j = 1; j < ny; j++) {
+      const y = -halfH + (j / ny) * halfH * 2;
+      list.push([-halfW, y], [halfW, y]);
+    }
+    return list;
+  }, []);
+
+  return (
+    <group position={[0, 0, 0.085]}>
+      {positions.map(([x, y], i) => (
+        <mesh key={i} position={[x, y, 0]}>
+          <sphereGeometry args={[0.026, 6, 5]} />
+          <meshStandardMaterial color={active ? "#e8cd9c" : "#bb9656"} metalness={0.85} roughness={0.3} />
+        </mesh>
+      ))}
     </group>
   );
 }

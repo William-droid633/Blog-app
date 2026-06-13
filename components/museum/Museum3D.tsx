@@ -66,6 +66,9 @@ export default function Museum3D({
   const [ready, setReady] = useState(false);
   const [veil, setVeil] = useState(true);
   const [flash, setFlash] = useState(false);
+  // L'aide à la navigation ne s'affiche qu'un court instant à l'entrée du
+  // couloir, puis s'efface pour ne plus gêner la contemplation.
+  const [showHint, setShowHint] = useState(true);
 
   const bounds = useMemo(() => corridorBounds(posts.length), [posts.length]);
   const travelZ = useRef(
@@ -102,6 +105,14 @@ export default function Museum3D({
     const timer = setTimeout(() => setVeil(false), 350);
     return () => clearTimeout(timer);
   }, [ready]);
+
+  // À l'entrée du couloir, l'aide reparaît brièvement puis s'efface (~6 s).
+  useEffect(() => {
+    if (phase !== "corridor") return;
+    setShowHint(true);
+    const timer = setTimeout(() => setShowHint(false), 6000);
+    return () => clearTimeout(timer);
+  }, [phase]);
 
   // Échap : on recule de l'œuvre
   useEffect(() => {
@@ -302,15 +313,24 @@ export default function Museum3D({
       {/* Couloir : aide à la visite */}
       {phase === "corridor" && !flash && (
         <>
-          <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center px-4">
-            <p className="border border-parchment/10 bg-night/60 px-5 py-2.5 text-center text-[10px] uppercase tracking-[0.22em] text-parchment/55 backdrop-blur-sm">
-              {focus && !focus.diving && focusedPost
-                ? "Cliquez à nouveau sur l’œuvre pour entrer dans l’article"
-                : focus?.diving
-                  ? "…"
-                  : "Molette ou glissez pour avancer · cliquez une œuvre pour l’admirer"}
-            </p>
-          </div>
+          {/* Indice de focus (toujours) ou rappel de navigation (fugace) */}
+          {focus && !focus.diving && focusedPost ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center px-4">
+              <p className="border border-parchment/10 bg-night/60 px-5 py-2.5 text-center text-[10px] uppercase tracking-[0.22em] text-parchment/60 backdrop-blur-sm">
+                Cliquez à nouveau sur l’œuvre pour entrer dans l’article
+              </p>
+            </div>
+          ) : (
+            <div
+              className={`pointer-events-none absolute inset-x-0 bottom-6 flex justify-center px-4 transition-opacity duration-1000 ${
+                showHint && !focus ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              <p className="border border-parchment/10 bg-night/50 px-5 py-2.5 text-center text-[10px] uppercase tracking-[0.22em] text-parchment/45 backdrop-blur-sm">
+                Molette ou glissez pour avancer · cliquez une œuvre pour l’admirer
+              </p>
+            </div>
+          )}
 
           {focus && !focus.diving && (
             <button

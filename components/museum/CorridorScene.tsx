@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Html, Instances, Instance, MeshReflectorMaterial, Environment, Lightformer } from "@react-three/drei";
+import { Instances, Instance, MeshReflectorMaterial, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import type { Post } from "@/lib/types";
 import Painting, { ART_Y, ART_WIDTH, ART_HEIGHT, type PaintingPlacement } from "./Painting";
@@ -14,6 +14,8 @@ import {
   fluteTexture,
   flameTexture,
   lightBeamTexture,
+  softParticleTexture,
+  inscriptionTexture,
   mosaicTexture,
   cofferTexture,
   frescoPanelTexture,
@@ -213,17 +215,24 @@ function ShadowSpot() {
   );
 }
 
-/** Poussière en suspension dans les rais de lumière. */
+/**
+ * Poussière en suspension dans les rais de lumière : particules rondes à
+ * halo (texture douce) et tailles variées, en lente dérive — bien plus
+ * crédibles que les anciens points carrés.
+ */
 function DustMotes({ topZ, bottomZ, count }: { topZ: number; bottomZ: number; count: number }) {
   const points = useRef<THREE.Points>(null);
-  const positions = useMemo(() => {
-    const arr = new Float32Array(count * 3);
+  const sprite = useMemo(() => softParticleTexture(), []);
+  const { positions, sizes } = useMemo(() => {
+    const positions = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-      arr[i * 3] = (Math.random() - 0.5) * (HALL_WIDTH - 1);
-      arr[i * 3 + 1] = 0.4 + Math.random() * (HALL_HEIGHT - 1);
-      arr[i * 3 + 2] = bottomZ + Math.random() * (topZ - bottomZ);
+      positions[i * 3] = (Math.random() - 0.5) * (HALL_WIDTH - 1);
+      positions[i * 3 + 1] = 0.4 + Math.random() * (HALL_HEIGHT - 1);
+      positions[i * 3 + 2] = bottomZ + Math.random() * (topZ - bottomZ);
+      sizes[i] = 0.03 + Math.pow(Math.random(), 2) * 0.09;
     }
-    return arr;
+    return { positions, sizes };
   }, [count, topZ, bottomZ]);
 
   useFrame(({ clock }) => {
@@ -237,12 +246,15 @@ function DustMotes({ topZ, bottomZ, count }: { topZ: number; bottomZ: number; co
     <points ref={points}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-size" args={[sizes, 1]} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.03}
-        color="#e8cd9c"
+        size={0.1}
+        map={sprite}
+        color="#f0dcb0"
         transparent
-        opacity={0.45}
+        opacity={0.5}
+        alphaTest={0.01}
         sizeAttenuation
         depthWrite={false}
         blending={THREE.AdditiveBlending}
@@ -278,13 +290,13 @@ function Niche({
   z,
   side,
   marble,
-  beam,
+  glow,
   bronzeTone,
 }: {
   z: number;
   side: number;
   marble: SurfaceMaps;
-  beam: THREE.Texture;
+  glow: THREE.Texture;
   bronzeTone: boolean;
 }) {
   const rotationY = side < 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -322,11 +334,11 @@ function Niche({
       <group position={[0, 1.32, 0.1]} scale={1.05}>
         <Amphora bronzeTone={bronzeTone} />
       </group>
-      {/* Lueur montante */}
-      <mesh position={[0, 1.9, 0.3]} rotation={[0, 0, Math.PI]}>
-        <planeGeometry args={[1.3, 2.2]} />
-        <meshBasicMaterial map={beam} transparent opacity={0.22} blending={THREE.AdditiveBlending} depthWrite={false} />
-      </mesh>
+      {/* Lueur chaude diffuse au fond de la niche (halo rond, sans rectangle) */}
+      <sprite position={[0, 1.55, -0.04]} scale={[1.5, 2.3, 1]}>
+        <spriteMaterial map={glow} color="#e0b878" transparent opacity={0.3} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </sprite>
+      <pointLight position={[0, 1.5, 0.5]} color="#ffb86a" intensity={3.2} distance={3.4} decay={2} />
     </group>
   );
 }
@@ -519,6 +531,125 @@ function FrescoPanel({
   );
 }
 
+/** Colonne libre (focal de l'abside) : base, fût cannelé galbé, chapiteau. */
+function FreeColumn({
+  position,
+  height,
+  marble,
+  flutes,
+}: {
+  position: [number, number, number];
+  height: number;
+  marble: SurfaceMaps;
+  flutes: THREE.Texture;
+}) {
+  const shaft = height - 0.7;
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.13, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.78, 0.26, 0.78]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      <mesh position={[0, 0.34, 0]} castShadow>
+        <cylinderGeometry args={[0.3, 0.36, 0.18, 22]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      <mesh position={[0, 0.45 + shaft / 2, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.24, 0.3, shaft, 24]} />
+        <meshStandardMaterial map={marble.map} roughnessMap={marble.roughnessMap} bumpMap={flutes} bumpScale={1.2} />
+      </mesh>
+      <mesh position={[0, height - 0.24, 0]} castShadow>
+        <cylinderGeometry args={[0.32, 0.24, 0.16, 22]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      <mesh position={[0, height - 0.08, 0]} castShadow>
+        <boxGeometry args={[0.72, 0.18, 0.72]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * Trépied de bronze (focal de l'abside MEMORIA) : trois pieds galbés à
+ * griffes réunis sous une vasque, feu sacré animé en langues croisées,
+ * braises et halo. Le foyer perpétuel de la mémoire.
+ */
+function Tripod({ flame }: { flame: THREE.Texture }) {
+  const flameA = useRef<THREE.Mesh>(null);
+  const flameB = useRef<THREE.Mesh>(null);
+  const ember = useRef<THREE.MeshStandardMaterial>(null);
+  const light = useRef<THREE.PointLight>(null);
+
+  const bowl = useMemo(() => {
+    const profile: Array<[number, number]> = [
+      [0.12, 0], [0.2, 0.04], [0.34, 0.12], [0.5, 0.24], [0.62, 0.36],
+      [0.64, 0.46], [0.58, 0.5], [0.5, 0.46],
+    ];
+    return new THREE.LatheGeometry(profile.map(([r, h]) => new THREE.Vector2(r, h)), 28);
+  }, []);
+  const flamePlane = useMemo(() => {
+    const g = new THREE.PlaneGeometry(0.95, 1.7);
+    g.translate(0, 0.85, 0);
+    return g;
+  }, []);
+
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    const f = 0.84 + Math.sin(t * 8.2) * 0.1 + Math.sin(t * 18.5) * 0.06;
+    if (flameA.current) flameA.current.scale.set(0.96, 0.72 + f * 0.5, 1);
+    if (flameB.current) flameB.current.scale.set(0.88, 0.68 + f * 0.55, 1);
+    if (ember.current) ember.current.emissiveIntensity = 1.8 + f * 1.8;
+    if (light.current) light.current.intensity = 26 * f;
+  });
+
+  return (
+    <group>
+      {/* Trois pieds galbés réunis vers le centre */}
+      {[0, (2 * Math.PI) / 3, (4 * Math.PI) / 3].map((a) => (
+        <group key={a} rotation={[0, a, 0]}>
+          <mesh position={[0.46, 0.7, 0]} rotation={[0, 0, 0.16]} castShadow>
+            <cylinderGeometry args={[0.05, 0.07, 1.5, 10]} />
+            <meshStandardMaterial color="#54421f" metalness={0.82} roughness={0.4} />
+          </mesh>
+          {/* Griffe au sol */}
+          <mesh position={[0.6, 0.06, 0]} castShadow>
+            <sphereGeometry args={[0.11, 10, 8]} />
+            <meshStandardMaterial color="#4a3a22" metalness={0.8} roughness={0.42} />
+          </mesh>
+          {/* Volute haute */}
+          <mesh position={[0.4, 1.42, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.1, 0.03, 8, 16]} />
+            <meshStandardMaterial color="#8a6530" metalness={0.86} roughness={0.34} />
+          </mesh>
+        </group>
+      ))}
+      {/* Anneau de ceinture */}
+      <mesh position={[0, 1.42, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.42, 0.04, 10, 28]} />
+        <meshStandardMaterial color="#8a6530" metalness={0.86} roughness={0.34} />
+      </mesh>
+      {/* Vasque */}
+      <mesh geometry={bowl} position={[0, 1.42, 0]} castShadow>
+        <meshStandardMaterial color="#5d4a24" metalness={0.82} roughness={0.38} />
+      </mesh>
+      {/* Braises */}
+      <mesh position={[0, 1.86, 0]} scale={[1, 0.4, 1]}>
+        <sphereGeometry args={[0.5, 16, 12]} />
+        <meshStandardMaterial ref={ember} color="#2b1206" emissive="#ff5a1a" emissiveIntensity={2.4} roughness={0.9} toneMapped={false} />
+      </mesh>
+      {/* Feu sacré */}
+      <mesh ref={flameA} geometry={flamePlane} position={[0, 1.9, 0]}>
+        <meshBasicMaterial map={flame} transparent depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} toneMapped={false} />
+      </mesh>
+      <mesh ref={flameB} geometry={flamePlane} position={[0, 1.9, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <meshBasicMaterial map={flame} transparent opacity={0.85} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} toneMapped={false} />
+      </mesh>
+      <pointLight ref={light} position={[0, 2.2, 0]} color="#ff9d45" intensity={26} distance={18} decay={2} />
+    </group>
+  );
+}
+
 /**
  * Le grand couloir d'exposition : dallage damier crème / vert antique
  * réfléchissant, tapis de mosaïque, murs en grand appareil scandés de
@@ -566,7 +697,10 @@ export default function CorridorScene({
   }, []);
   const flame = useMemo(() => flameTexture(), []);
   const beam = useMemo(() => lightBeamTexture(), []);
+  const glow = useMemo(() => softParticleTexture(), []);
+  const memoria = useMemo(() => inscriptionTexture("MEMORIA"), []);
   const skyStars = useMemo(() => starPositions(300, 60), []);
+  const skyStarTex = useMemo(() => softParticleTexture(), []);
 
   useEffect(() => {
     camera.position.set(0, EYE_HEIGHT, travelZ.current);
@@ -802,7 +936,7 @@ export default function CorridorScene({
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[skyStars, 3]} />
         </bufferGeometry>
-        <pointsMaterial size={0.3} color="#e9e4d4" transparent opacity={0.7} sizeAttenuation depthWrite={false} />
+        <pointsMaterial size={0.4} map={skyStarTex} color="#e9e4d4" transparent opacity={0.7} alphaTest={0.01} sizeAttenuation depthWrite={false} />
       </points>
 
       {/* Poussière dans la lumière */}
@@ -856,40 +990,74 @@ export default function CorridorScene({
         </mesh>
       </group>
 
-      {/* Abside MEMORIA au bout du couloir */}
+      {/* ——— Abside MEMORIA : sanctuaire au bout du couloir ——— */}
+      {/* Mur courbe en hémicycle */}
       <mesh position={[0, HALL_HEIGHT / 2, bottomZ]} receiveShadow>
-        <cylinderGeometry args={[HALL_WIDTH / 2, HALL_WIDTH / 2, HALL_HEIGHT, 28, 1, true, Math.PI / 2, Math.PI]} />
+        <cylinderGeometry args={[HALL_WIDTH / 2, HALL_WIDTH / 2, HALL_HEIGHT, 32, 1, true, Math.PI / 2, Math.PI]} />
         <meshStandardMaterial {...entranceWall} bumpScale={0.9} side={THREE.BackSide} />
       </mesh>
-      <group position={[0, 0, bottomZ + 1.6]}>
-        <mesh position={[0, 0.85, 0]} castShadow receiveShadow>
-          <boxGeometry args={[1.9, 1.7, 1.9]} />
+      {/* Demi-coupole à caissons coiffant l'abside */}
+      <mesh position={[0, HALL_HEIGHT, bottomZ]}>
+        <sphereGeometry args={[HALL_WIDTH / 2, 32, 14, Math.PI / 2, Math.PI, 0, Math.PI / 2]} />
+        <meshStandardMaterial map={coffer} roughness={0.85} side={THREE.BackSide} />
+      </mesh>
+      {/* Corniche dorée à la naissance de la coupole */}
+      <mesh position={[0, HALL_HEIGHT - 0.05, bottomZ]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[HALL_WIDTH / 2 - 0.06, 0.1, 12, 32, Math.PI]} />
+        <meshStandardMaterial color="#8a6a3c" metalness={0.78} roughness={0.32} />
+      </mesh>
+      {/* Soubassement courbe de l'abside */}
+      <mesh position={[0, 0.5, bottomZ]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[HALL_WIDTH / 2 - 0.05, 0.12, 10, 32, Math.PI]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+
+      {/* Inscription MEMORIA gravée sur le mur de l'abside (WebGL) */}
+      <mesh position={[0, 4.5, bottomZ + 0.55]}>
+        <planeGeometry args={[3.9, 0.49]} />
+        <meshBasicMaterial map={memoria} transparent depthWrite={false} toneMapped={false} />
+      </mesh>
+
+      {/* Colonnes encadrant le foyer */}
+      <FreeColumn position={[-2.55, 0, bottomZ + 1]} height={4.5} marble={marble} flutes={flutes} />
+      <FreeColumn position={[2.55, 0, bottomZ + 1]} height={4.5} marble={marble} flutes={flutes} />
+
+      {/* Autel à degrés et trépied au feu sacré */}
+      <group position={[0, 0, bottomZ + 1.7]}>
+        <mesh position={[0, 0.16, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.5, 0.32, 2.5]} />
           <meshStandardMaterial {...marble} bumpScale={0.5} />
         </mesh>
-        <group position={[0, 1.7, 0]} scale={1.7}>
-          <Amphora bronzeTone />
-        </group>
-        <mesh position={[0, 4, 0]}>
-          <coneGeometry args={[0.26, 0.7, 12]} />
-          <meshBasicMaterial color="#ffb347" transparent opacity={0.9} toneMapped={false} />
+        <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
+          <boxGeometry args={[1.7, 0.5, 1.7]} />
+          <meshStandardMaterial {...marble} bumpScale={0.5} />
         </mesh>
-        <pointLight position={[0, 3.4, 1]} color="#ff9d45" intensity={20} distance={16} decay={2} />
-        <Html transform position={[0, 4.9, 0]} scale={0.55} style={{ pointerEvents: "none", userSelect: "none" }}>
-          <div
-            style={{
-              fontFamily: "var(--font-display), Georgia, serif",
-              letterSpacing: "0.45em",
-              fontWeight: 700,
-              fontSize: "26px",
-              color: "#c9a36a",
-              textShadow: "0 2px 8px rgba(0,0,0,0.8)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            MEMORIA
-          </div>
-        </Html>
+        <mesh position={[0, 0.84, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2, 0.12, 2]} />
+          <meshStandardMaterial color="#8a6a3c" metalness={0.6} roughness={0.4} />
+        </mesh>
+        <group position={[0, 0.9, 0]} scale={1.15}>
+          <Tripod flame={flame} />
+        </group>
       </group>
+
+      {/* Amphores votives de part et d'autre de l'autel */}
+      {[-1, 1].map((s) => (
+        <group key={s} position={[s * 3.1, 0, bottomZ + 2.5]}>
+          <mesh position={[0, 0.3, 0]} castShadow receiveShadow>
+            <cylinderGeometry args={[0.34, 0.4, 0.6, 18]} />
+            <meshStandardMaterial {...marble} bumpScale={0.5} />
+          </mesh>
+          <group position={[0, 0.6, 0]} scale={0.95}>
+            <Amphora bronzeTone={s === 1} />
+          </group>
+        </group>
+      ))}
+
+      {/* Lueur chaude baignant l'abside */}
+      <sprite position={[0, 3.2, bottomZ + 0.4]} scale={[7, 7, 1]}>
+        <spriteMaterial map={glow} color="#ffb86a" transparent opacity={0.28} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </sprite>
 
       {/* Niches à amphores face aux œuvres, bancs de marbre */}
       {placements.map((placement) => (
@@ -898,7 +1066,7 @@ export default function CorridorScene({
           z={placement.position.z}
           side={placement.normal.x}
           marble={marble}
-          beam={beam}
+          glow={glow}
           bronzeTone={placement.index % 2 === 1}
         />
       ))}
@@ -913,7 +1081,6 @@ export default function CorridorScene({
           placement={placement}
           focused={focus?.index === placement.index}
           onSelect={onSelect}
-          beam={beam}
         />
       ))}
     </>

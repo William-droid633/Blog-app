@@ -581,6 +581,152 @@ export function inscriptionTexture(text: string, width = 2048, height = 256): TH
   return texture;
 }
 
+function fontFamily(variable: string): string {
+  const v =
+    (typeof document !== "undefined" &&
+      getComputedStyle(document.documentElement).getPropertyValue(variable).trim()) ||
+    "";
+  return v ? `${v}, Georgia, serif` : "Georgia, serif";
+}
+
+/** Texte centré à interlettrage manuel (fiable sur tous les navigateurs). */
+function fillTracked(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  y: number,
+  tracking: number
+) {
+  const chars = Array.from(text);
+  const widths = chars.map((c) => ctx.measureText(c).width);
+  const total = widths.reduce((a, b) => a + b, 0) + tracking * Math.max(0, chars.length - 1);
+  let x = cx - total / 2;
+  ctx.textAlign = "left";
+  chars.forEach((c, i) => {
+    ctx.fillText(c, x, y);
+    x += widths[i] + tracking;
+  });
+  ctx.textAlign = "center";
+}
+
+/** Découpe un titre en lignes tenant dans `maxWidth` (2 lignes max, ellipse). */
+function wrapTitle(ctx: CanvasRenderingContext2D, title: string, maxWidth: number): string[] {
+  const words = title.split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+      if (lines.length === 2) break;
+    } else {
+      line = test;
+    }
+  }
+  if (lines.length < 2 && line) lines.push(line);
+  if (lines.length === 2 && ctx.measureText(lines[1]).width > maxWidth) {
+    let s = lines[1];
+    while (s && ctx.measureText(`${s}…`).width > maxWidth) s = s.slice(0, -1);
+    lines[1] = `${s}…`;
+  }
+  return lines.slice(0, 2);
+}
+
+function drawCartel(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  roman: string,
+  title: string,
+  date: string
+) {
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Fond parchemin patiné
+  const bg = ctx.createLinearGradient(0, 0, 0, h);
+  bg.addColorStop(0, "#f1ead8");
+  bg.addColorStop(1, "#dcd0b4");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, w, h);
+  const grain = ctx.createImageData(w, h);
+  for (let i = 0; i < grain.data.length; i += 4) {
+    const n = 235 + Math.floor(Math.random() * 18);
+    grain.data[i] = grain.data[i + 1] = grain.data[i + 2] = n;
+    grain.data[i + 3] = 12;
+  }
+  ctx.putImageData(grain, 0, 0);
+  ctx.fillStyle = bg;
+  ctx.globalAlpha = 0.82;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalAlpha = 1;
+
+  // Double filet doré gravé
+  ctx.strokeStyle = "#9a7a45";
+  ctx.lineWidth = Math.max(2, w * 0.008);
+  ctx.strokeRect(w * 0.04, h * 0.06, w * 0.92, h * 0.88);
+  ctx.strokeStyle = "rgba(154, 122, 69, 0.4)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(w * 0.065, h * 0.1, w * 0.87, h * 0.8);
+
+  const display = fontFamily("--font-display");
+  const accent = fontFamily("--font-accent");
+
+  // ŒUVRE + chiffre romain
+  ctx.fillStyle = "#8a6a3c";
+  ctx.font = `600 ${Math.round(h * 0.1)}px ${display}`;
+  ctx.textBaseline = "middle";
+  fillTracked(ctx, `ŒUVRE ${roman}`, w / 2, h * 0.24, h * 0.05);
+
+  // Filet de séparation
+  ctx.strokeStyle = "rgba(138, 106, 60, 0.45)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(w * 0.32, h * 0.34);
+  ctx.lineTo(w * 0.68, h * 0.34);
+  ctx.stroke();
+
+  // Titre (1–2 lignes)
+  ctx.fillStyle = "#2c2317";
+  ctx.font = `700 ${Math.round(h * 0.15)}px ${display}`;
+  const lines = wrapTitle(ctx, title.toUpperCase(), w * 0.82);
+  const titleY = lines.length === 1 ? h * 0.52 : h * 0.46;
+  lines.forEach((line, i) => {
+    ctx.fillText(line, w / 2, titleY + i * h * 0.17);
+  });
+
+  // Date en italique
+  ctx.fillStyle = "#6f5a3a";
+  ctx.font = `italic 400 ${Math.round(h * 0.105)}px ${accent}`;
+  ctx.fillText(date, w / 2, h * 0.82);
+}
+
+/**
+ * Cartel d'œuvre gravé sur canvas (numéro romain, titre, date) — plaqué
+ * sur un panneau dans la scène WebGL : il apparaît et disparaît avec le
+ * couloir, sans la latence ni le rectangle fantôme d'un calque DOM.
+ * Redessiné quand les polices web sont prêtes.
+ */
+export function cartelTexture(
+  roman: string,
+  title: string,
+  date: string,
+  width = 640,
+  height = 400
+): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(width, height);
+  drawCartel(canvas, ctx, roman, title, date);
+  const texture = toTexture(canvas, true, false);
+  if (typeof document !== "undefined" && document.fonts?.ready) {
+    document.fonts.ready.then(() => {
+      drawCartel(canvas, ctx, roman, title, date);
+      texture.needsUpdate = true;
+    });
+  }
+  return texture;
+}
+
 /** Œuvre de remplacement quand un article n'a pas d'image. */
 export function placeholderArtTexture(title: string, size = 512): THREE.CanvasTexture {
   const [canvas, ctx] = makeCanvas(size);
