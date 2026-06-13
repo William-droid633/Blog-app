@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { useLoader } from "@react-three/fiber";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useFrame, useLoader } from "@react-three/fiber";
+import { Instances, Instance } from "@react-three/drei";
 import * as THREE from "three";
 import { formatDate } from "@/lib/format-date";
 import { toRoman } from "@/lib/roman";
@@ -12,6 +13,14 @@ import { placeholderArtTexture, cartelTexture, softParticleTexture } from "./tex
 export const ART_WIDTH = 2.6;
 export const ART_HEIGHT = 2.0;
 export const ART_Y = 2.05;
+
+/** Au-delà de cette distance (en mètres), l'œuvre est de toute façon noyée
+ *  dans le brouillard du couloir : on cesse de la dessiner. */
+const PAINTING_RENDER_DISTANCE = 44;
+
+/** Côté max de la texture de toile : inutile de garder une image 1920² en
+ *  mémoire vidéo pour un cadre affiché petit (≈6× moins de VRAM). */
+const ART_TEXTURE_MAX = 768;
 
 /** Ajuste la texture pour remplir le cadre sans déformation (cover). */
 function fitCover(texture: THREE.Texture) {
@@ -29,13 +38,30 @@ function fitCover(texture: THREE.Texture) {
 }
 
 function LoadedArt({ url }: { url: string }) {
-  const texture = useLoader(THREE.TextureLoader, url);
+  const loaded = useLoader(THREE.TextureLoader, url);
 
-  useEffect(() => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    fitCover(texture);
-    texture.needsUpdate = true;
-  }, [texture]);
+  // Copie réduite à la taille d'affichage : on évite de téléverser une
+  // texture pleine résolution en mémoire vidéo pour un petit cadre.
+  const texture = useMemo(() => {
+    const image = loaded.image as HTMLImageElement;
+    const iw = image.naturalWidth || image.width || 1;
+    const ih = image.naturalHeight || image.height || 1;
+    const scale = Math.min(1, ART_TEXTURE_MAX / Math.max(iw, ih));
+    const w = Math.max(1, Math.round(iw * scale));
+    const h = Math.max(1, Math.round(ih * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+    ctx.drawImage(image, 0, 0, w, h);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    fitCover(tex);
+    return tex;
+  }, [loaded]);
+
+  useEffect(() => () => texture.dispose(), [texture]);
 
   return (
     <mesh position={[0, 0, 0.11]}>
@@ -128,6 +154,16 @@ export default function Painting({
 }) {
   const { post, index, number, position, rotationY } = placement;
   const [hovered, setHovered] = useState(false);
+  const rootRef = useRef<THREE.Group>(null);
+
+  // N'affiche que les œuvres proches (les lointaines sont noyées dans le
+  // brouillard) : autant d'ombres, de dessins et de surimpression en moins.
+  useFrame(({ camera }) => {
+    if (rootRef.current) {
+      rootRef.current.visible =
+        Math.abs(position.z - camera.position.z) < PAINTING_RENDER_DISTANCE;
+    }
+  });
 
   const glow = useMemo(() => softParticleTexture(), []);
   const cartel = useMemo(
@@ -145,7 +181,7 @@ export default function Painting({
   const active = hovered || focused;
 
   return (
-    <group position={position} rotation={[0, rotationY, 0]}>
+    <group ref={rootRef} position={position} rotation={[0, rotationY, 0]}>
       {/* Halo lumineux doux et rond projeté sur le mur derrière le cadre :
           remplace l'ancien plan rectangulaire qui se voyait en transparence */}
       <sprite position={[0, 0.1, -0.04]} scale={[ART_WIDTH + 2, ART_HEIGHT + 2, 1]}>
@@ -240,12 +276,15 @@ function Beads({ active }: { active: boolean }) {
 
   return (
     <group position={[0, 0, 0.055]}>
-      {positions.map(([x, y], i) => (
-        <mesh key={i} position={[x, y, 0]}>
-          <sphereGeometry args={[0.026, 6, 5]} />
-          <meshStandardMaterial color={active ? "#e8cd9c" : "#bb9656"} metalness={0.85} roughness={0.3} />
-        </mesh>
-      ))}
+      {/* Toutes les perles d'un cadre en un seul dessin (instanciation) au
+          lieu d'une centaine de petits objets distincts. */}
+      <Instances limit={positions.length} range={positions.length}>
+        <sphereGeometry args={[0.026, 6, 5]} />
+        <meshStandardMaterial color={active ? "#e8cd9c" : "#bb9656"} metalness={0.85} roughness={0.3} />
+        {positions.map(([x, y], i) => (
+          <Instance key={i} position={[x, y, 0]} />
+        ))}
+      </Instances>
     </group>
   );
 }
