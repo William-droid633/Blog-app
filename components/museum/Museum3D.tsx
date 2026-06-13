@@ -22,7 +22,10 @@ function AdaptiveFov({ base }: { base: number }) {
 
   useEffect(() => {
     const aspect = size.width / size.height;
-    camera.fov = aspect < 1 ? Math.min(96, base + (1 - aspect) * 42) : base;
+    // En portrait (mobile), on élargit nettement le champ pour dégager les
+    // côtés : la perspective verticale étant contrainte par l'écran haut et
+    // étroit, augmenter le FOV est le seul moyen de « voir plus large ».
+    camera.fov = aspect < 1 ? Math.min(115, base + (1 - aspect) * 66) : base;
     camera.updateProjectionMatrix();
   }, [camera, size, base]);
 

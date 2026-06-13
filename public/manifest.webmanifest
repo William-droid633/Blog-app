@@ -1,0 +1,26 @@
+{
+  "name": "Herkul — Musée personnel",
+  "short_name": "Herkul",
+  "description": "Herkul — musée personnel : récits, images et réflexions exposés comme des œuvres antiques.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0C0A08",
+  "theme_color": "#0C0A08",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
