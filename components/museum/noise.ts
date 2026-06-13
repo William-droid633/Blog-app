@@ -96,27 +96,35 @@ export function mix(a: RGB, b: RGB, t: number): RGB {
 }
 
 /**
- * Construit un canvas en évaluant `shader(u, v)` pour chaque pixel
- * (u et v dans [0, 1]) — retourne [couleur, relief, rugosité].
+ * Construit les cartes d'un matériau en évaluant `shader(u, v)` pour chaque
+ * pixel (u, v dans [0, 1]) → [couleur, hauteur, rugosité]. Le champ de
+ * hauteur est ensuite converti en véritable **carte de normales** tangentes
+ * par filtre de Sobel (avec enroulement aux bords) : la lumière accroche la
+ * surface bien plus finement qu'avec un simple relief grayscale. `strength`
+ * règle l'amplitude (pierre brute élevée, marbre poli faible).
  */
 export function bakeSurface(
   size: number,
-  shader: (u: number, v: number) => { color: RGB; bump: number; rough: number }
-): { color: HTMLCanvasElement; bump: HTMLCanvasElement; rough: HTMLCanvasElement } {
+  shader: (u: number, v: number) => { color: RGB; bump: number; rough: number },
+  strength = 2.2
+): { color: HTMLCanvasElement; normal: HTMLCanvasElement; rough: HTMLCanvasElement } {
   const colorCanvas = document.createElement("canvas");
-  const bumpCanvas = document.createElement("canvas");
+  const normalCanvas = document.createElement("canvas");
   const roughCanvas = document.createElement("canvas");
   colorCanvas.width = colorCanvas.height = size;
-  bumpCanvas.width = bumpCanvas.height = size;
+  normalCanvas.width = normalCanvas.height = size;
   roughCanvas.width = roughCanvas.height = size;
 
   const colorCtx = colorCanvas.getContext("2d") as CanvasRenderingContext2D;
-  const bumpCtx = bumpCanvas.getContext("2d") as CanvasRenderingContext2D;
+  const normalCtx = normalCanvas.getContext("2d") as CanvasRenderingContext2D;
   const roughCtx = roughCanvas.getContext("2d") as CanvasRenderingContext2D;
 
   const colorData = colorCtx.createImageData(size, size);
-  const bumpData = bumpCtx.createImageData(size, size);
+  const normalData = normalCtx.createImageData(size, size);
   const roughData = roughCtx.createImageData(size, size);
+
+  // Champ de hauteur, conservé pour en dériver les normales.
+  const height = new Float32Array(size * size);
 
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
@@ -126,17 +134,42 @@ export function bakeSurface(
       colorData.data[i + 1] = color.g;
       colorData.data[i + 2] = color.b;
       colorData.data[i + 3] = 255;
-      const bumpValue = Math.min(255, Math.max(0, bump * 255));
-      bumpData.data[i] = bumpData.data[i + 1] = bumpData.data[i + 2] = bumpValue;
-      bumpData.data[i + 3] = 255;
+      height[py * size + px] = bump;
       const roughValue = Math.min(255, Math.max(0, rough * 255));
       roughData.data[i] = roughData.data[i + 1] = roughData.data[i + 2] = roughValue;
       roughData.data[i + 3] = 255;
     }
   }
 
+  // Normales par opérateur de Sobel, avec enroulement (textures répétables).
+  const at = (x: number, y: number) =>
+    height[((y + size) % size) * size + ((x + size) % size)];
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      const dx =
+        (at(px + 1, py - 1) + 2 * at(px + 1, py) + at(px + 1, py + 1) -
+          at(px - 1, py - 1) - 2 * at(px - 1, py) - at(px - 1, py + 1)) *
+        strength;
+      const dy =
+        (at(px - 1, py + 1) + 2 * at(px, py + 1) + at(px + 1, py + 1) -
+          at(px - 1, py - 1) - 2 * at(px, py - 1) - at(px + 1, py - 1)) *
+        strength;
+      let nx = -dx;
+      let ny = -dy;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      nx /= len;
+      ny /= len;
+      const i = (py * size + px) * 4;
+      normalData.data[i] = (nx * 0.5 + 0.5) * 255;
+      normalData.data[i + 1] = (ny * 0.5 + 0.5) * 255;
+      normalData.data[i + 2] = (nz / len) * 127.5 + 127.5;
+      normalData.data[i + 3] = 255;
+    }
+  }
+
   colorCtx.putImageData(colorData, 0, 0);
-  bumpCtx.putImageData(bumpData, 0, 0);
+  normalCtx.putImageData(normalData, 0, 0);
   roughCtx.putImageData(roughData, 0, 0);
-  return { color: colorCanvas, bump: bumpCanvas, rough: roughCanvas };
+  return { color: colorCanvas, normal: normalCanvas, rough: roughCanvas };
 }

@@ -9,7 +9,7 @@ import { bakeSurface, fbm, turbulence, hexToRgb, mix, type RGB } from "./noise";
 
 export interface SurfaceMaps {
   map: THREE.CanvasTexture;
-  bumpMap: THREE.CanvasTexture;
+  normalMap: THREE.CanvasTexture;
   roughnessMap: THREE.CanvasTexture;
 }
 
@@ -25,19 +25,19 @@ function toTexture(canvas: HTMLCanvasElement, srgb: boolean, repeat = true): THR
 }
 
 function toSurface(
-  baked: { color: HTMLCanvasElement; bump: HTMLCanvasElement; rough: HTMLCanvasElement },
+  baked: { color: HTMLCanvasElement; normal: HTMLCanvasElement; rough: HTMLCanvasElement },
   repeat = true
 ): SurfaceMaps {
   return {
     map: toTexture(baked.color, true, repeat),
-    bumpMap: toTexture(baked.bump, false, repeat),
+    normalMap: toTexture(baked.normal, false, repeat),
     roughnessMap: toTexture(baked.rough, false, repeat),
   };
 }
 
 export function setRepeat(surface: SurfaceMaps, x: number, y: number): SurfaceMaps {
   surface.map.repeat.set(x, y);
-  surface.bumpMap.repeat.set(x, y);
+  surface.normalMap.repeat.set(x, y);
   surface.roughnessMap.repeat.set(x, y);
   return surface;
 }
@@ -49,7 +49,7 @@ export function setRepeat(surface: SurfaceMaps, x: number, y: number): SurfaceMa
 export function cloneSurface(surface: SurfaceMaps): SurfaceMaps {
   return {
     map: surface.map.clone() as THREE.CanvasTexture,
-    bumpMap: surface.bumpMap.clone() as THREE.CanvasTexture,
+    normalMap: surface.normalMap.clone() as THREE.CanvasTexture,
     roughnessMap: surface.roughnessMap.clone() as THREE.CanvasTexture,
   };
 }
@@ -67,17 +67,25 @@ export function marbleSurface(size = 512): SurfaceMaps {
       // Veines : sinusoïde déformée par le bruit, repliée et affinée
       const veinField = Math.sin((u * 3 + warp * 2.6 + v * 0.8) * Math.PI * 2);
       const vein = Math.pow(1 - Math.abs(veinField), 14);
+      // Réseau secondaire de veines plus fines, orientées autrement
+      const warp2 = fbm(u * 13 + 5.1, v * 13 + 9.7, 3);
+      const vein2 =
+        Math.pow(1 - Math.abs(Math.sin((v * 4 - u * 1.4 + warp2 * 3) * Math.PI * 2)), 20) * 0.6;
       const microVein = Math.pow(1 - Math.abs(Math.sin((v * 5 + clouds * 3.1) * Math.PI * 2)), 22) * 0.5;
+      // Grain microscopique du poli (capté par la lumière rasante)
+      const grain = fbm(u * 110 + 4.3, v * 110 + 8.1, 2);
 
       let color = mix(base, shadowTone, (clouds - 0.5) * 1.2 + 0.2);
-      color = mix(color, veinTone, vein * 0.75 + microVein);
+      color = mix(color, veinTone, vein * 0.7 + vein2 + microVein);
+      // Patine chaude par plaques (marbre légèrement vieilli)
+      color = mix(color, hexToRgb("#cdbf9c"), Math.max(0, warp - 0.62) * 0.5);
 
       return {
         color,
-        bump: 0.55 + (clouds - 0.5) * 0.2 - vein * 0.3,
-        rough: 0.5 + (clouds - 0.5) * 0.18 + vein * 0.18,
+        bump: 0.55 + (clouds - 0.5) * 0.18 - (vein + vein2) * 0.28 + (grain - 0.5) * 0.08,
+        rough: 0.46 + (clouds - 0.5) * 0.16 + (vein + vein2) * 0.2 + (grain - 0.5) * 0.06,
       };
-    })
+    }, 1.8)
   );
 }
 
@@ -96,17 +104,21 @@ export function travertineSurface(size = 512): SurfaceMaps {
       const pores = turbulence(u * 26, v * 26, 3);
       const pore = pores < 0.16 ? (0.16 - pores) / 0.16 : 0;
       const grain = fbm(u * 40 + 7.7, v * 40 + 3.3, 3);
+      const micro = fbm(u * 130 + 2.7, v * 130 + 6.4, 2);
+      // Coulures d'oxyde de fer (taches rousses)
+      const rust = Math.max(0, fbm(u * 3 + 20.5, v * 7 + 11.3, 4) - 0.6);
 
       let color = mix(light, band, strata * 0.55 + (warp - 0.5) * 0.4);
       color = mix(color, pitTone, pore * 0.8);
       color = mix(color, hexToRgb("#dccfae"), (grain - 0.5) * 0.3);
+      color = mix(color, hexToRgb("#9c7a52"), rust * 0.5);
 
       return {
         color,
-        bump: 0.6 - pore * 0.5 + (grain - 0.5) * 0.12 - strata * 0.05,
+        bump: 0.6 - pore * 0.5 + (grain - 0.5) * 0.12 - strata * 0.05 + (micro - 0.5) * 0.07,
         rough: 0.78 + pore * 0.2 - (grain - 0.5) * 0.08,
       };
-    })
+    }, 2.6)
   );
 }
 
@@ -157,7 +169,7 @@ export function floorSurface(size = 1024): SurfaceMaps {
         bump: 0.6 - joint * 0.45 + (clouds - 0.5) * 0.06,
         rough: 0.22 + joint * 0.5 + (clouds - 0.5) * 0.1 + vein * 0.08 + tileJitter * 0.12,
       };
-    })
+    }, 1.5)
   );
 }
 
@@ -182,7 +194,7 @@ export function bronzeSurface(size = 512): SurfaceMaps {
         bump: 0.5 + (wear - 0.5) * 0.3,
         rough: 0.38 + patinaAmount * 0.3 + (wear - 0.5) * 0.12,
       };
-    })
+    }, 1.9)
   );
 }
 
@@ -224,7 +236,7 @@ export function sandSurface(size = 1024): SurfaceMaps {
         bump: 0.5 + (grain - 0.5) * 0.28 + (micro - 0.5) * 0.18 + ripple * 0.07 + pebble * 0.5,
         rough: 0.94 - pebble * 0.25 + (grain - 0.5) * 0.06,
       };
-    })
+    }, 2.6)
   );
 }
 
@@ -267,17 +279,24 @@ export function ashlarSurface(size = 1024): SurfaceMaps {
       const pore = pores < 0.13 ? (0.13 - pores) / 0.13 : 0;
       const grain = fbm(u * 44 + 21, v * 44 + 7, 3);
 
+      // Coulures verticales de ruissellement, plus marquées vers le bas du bloc
+      const streak = fbm(u * 50 + col * 3.3, v * 5, 3);
+      const micro = fbm(u * 140 + 3.1, v * 140 + 7.7, 2);
+
       let color = mix(light, band, (blockTone - 0.5) * 1.3 + (warp - 0.5) * 0.5);
       color = mix(color, hexToRgb("#d8cba9"), (grain - 0.5) * 0.3);
       color = mix(color, pitTone, pore * 0.6);
+      color = mix(color, hexToRgb("#8c7e60"), Math.max(0, streak - 0.55) * 0.5 * fv);
       color = mix(color, jointTone, joint * 0.9);
 
       return {
         color,
-        bump: 0.62 - joint * 0.5 - pore * 0.3 + (warp - 0.5) * 0.1 + (grain - 0.5) * 0.08,
+        bump:
+          0.62 - joint * 0.5 - pore * 0.3 + (warp - 0.5) * 0.1 + (grain - 0.5) * 0.08 +
+          (micro - 0.5) * 0.06,
         rough: 0.8 + pore * 0.15 - (blockTone - 0.5) * 0.08,
       };
-    })
+    }, 2.7)
   );
 }
 

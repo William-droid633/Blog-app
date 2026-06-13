@@ -768,8 +768,7 @@ export default function CorridorScene({
           <MeshReflectorMaterial
             map={floor.map}
             roughnessMap={floor.roughnessMap}
-            bumpMap={floor.bumpMap}
-            bumpScale={0.4}
+            normalMap={floor.normalMap}
             resolution={192}
             blur={[180, 40]}
             mixBlur={1.1}
