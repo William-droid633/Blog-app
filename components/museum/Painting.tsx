@@ -202,14 +202,15 @@ export default function Painting({
 
       <PictureLight />
 
-      {/* Cartel gravé, plaqué sur le mur sous l'œuvre (dans le WebGL) */}
-      <group position={[0, -(ART_HEIGHT / 2) - 0.66, -0.02]}>
+      {/* Cartel gravé, plaqué sous l'œuvre — nettement détaché du cadre pour
+          éviter tout chevauchement (z-fighting) avec sa bordure inférieure */}
+      <group position={[0, -(ART_HEIGHT / 2) - 0.7, -0.04]}>
         <mesh castShadow>
-          <boxGeometry args={[1.5, 0.94, 0.05]} />
+          <boxGeometry args={[1.0, 0.64, 0.05]} />
           <meshStandardMaterial color="#cdbf9f" roughness={0.8} />
         </mesh>
         <mesh position={[0, 0, 0.03]}>
-          <planeGeometry args={[1.42, 0.86]} />
+          <planeGeometry args={[0.9, 0.56]} />
           <meshBasicMaterial map={cartel} transparent toneMapped={false} />
         </mesh>
       </group>

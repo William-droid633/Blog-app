@@ -15,7 +15,7 @@ import { gaussian, softParticleTexture } from "./textures";
  * Points ronds additifs : le bloom de la scène fait briller le cœur.
  */
 
-const RADIUS = 150;
+const RADIUS = 120;
 const BRANCHES = 5;
 const SPIN = 3.2; // enroulement total (radians) du centre au bord
 const CORE = new THREE.Color("#ffd9a4");
@@ -88,21 +88,23 @@ export default function Galaxy({ count = 30000 }: { count?: number }) {
   });
 
   return (
-    // Disque déployé très haut et centré sur la scène : on se trouve dans son
-    // plan, près du bord ; la bande lumineuse passe au-dessus du temple, le
-    // cœur doré brillant à l'aplomb. Légèrement basculé pour la perspective.
-    <group position={[0, 96, 4]} rotation={[0.4, 0.15, -0.35]}>
+    // Disque vu presque par la tranche, centré derrière et au-dessus du temple :
+    // on est dans son plan, la grande bande d'étoiles arque tout en travers du
+    // ciel (du bas vers le haut), le cœur doré brillant en plein champ. Sa
+    // moitié basse plonge sous l'horizon (masquée par le sol) → effet « Voie
+    // lactée qui se lève », bien plus immersif qu'une spirale lointaine.
+    <group position={[0, 30, -26]} rotation={[1.02, 0.12, -0.52]}>
       <points ref={points} renderOrder={-1}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[colors, 3]} />
         </bufferGeometry>
         <pointsMaterial
-          size={1.05}
+          size={1.5}
           map={sprite}
           vertexColors
           transparent
-          opacity={0.92}
+          opacity={0.95}
           alphaTest={0.001}
           sizeAttenuation
           depthWrite={false}
