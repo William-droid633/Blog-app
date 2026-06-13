@@ -783,6 +783,96 @@ export function skyGradientTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+/**
+ * Ciel de nébuleuse plaqué sur le dôme céleste : vastes nappes de gaz chaud
+ * (ocre → tan clair) creusées de voies de poussière brune, un grand cœur
+ * lumineux bleu acier calé vers la vue par défaut (−Z, le temple), un voile
+ * bleuté en haut et un fond spatial profond. Recrée l'aspect d'une
+ * photographie de nébuleuse de la Voie lactée — sans aucun fichier externe.
+ * Le semis d'étoiles dense est fourni à part par les points 3D (Stars), qui
+ * restent nets et parallaxés.
+ *
+ * Carte équirectangulaire : u = azimut (≈0,75 → direction du temple),
+ * v = du zénith (0) au nadir (1) ; après flipY, le haut du canevas est le
+ * zénith. La nébuleuse couvre tout le ciel pour qu'aucune direction ne
+ * paraisse vide, mais culmine dans la bande mi-haute que cadre la caméra.
+ */
+export function nebulaSkyTexture(width = 1024, height = 512): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+  const img = ctx.createImageData(width, height);
+  const data = img.data;
+
+  // Palette relevée sur la photographie de référence.
+  const space = hexToRgb("#05060d"); // fond spatial profond
+  const warmDeep = hexToRgb("#2a1a0f"); // lueur brune des "vides"
+  const warmMid = hexToRgb("#a8743f"); // gaz chaud ocre
+  const warmLight = hexToRgb("#e6bb8a"); // crêtes tan éclairées
+  const dust = hexToRgb("#341f14"); // voies de poussière sombres
+  const topHaze = hexToRgb("#2b3c5e"); // voile bleuté du haut
+  const blueDeep = hexToRgb("#3a5c84"); // halo bleu du cœur
+  const blueBright = hexToRgb("#bcd6f4"); // noyau lumineux
+
+  const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+
+  // Centre du cœur lumineux : azimut du temple (−Z) et bande mi-haute.
+  const uCore = 0.75;
+  const vCore = 0.4;
+
+  for (let py = 0; py < height; py++) {
+    const v = py / height;
+    for (let px = 0; px < width; px++) {
+      const u = px / width;
+
+      // Structure des nuages, déformée par un bruit basse fréquence.
+      const warp = fbm(u * 3 + 11.5, v * 3 + 4.2, 3);
+      const clouds = fbm(u * 6 + warp * 1.8 + 21, v * 6 + warp * 1.8 + 7, 5);
+      const detail = fbm(u * 15 + 5, v * 15 + 33, 4);
+      const lanes = turbulence(u * 9 + 2, v * 9 + 8, 4);
+
+      // Les nappes culminent dans la bande mi-haute, sans jamais s'éteindre.
+      const vWin = Math.max(0.34, Math.min(1, 1.18 - Math.abs(v - 0.4) * 1.0));
+      const warm = clamp01((clouds - 0.38) * 2 + (detail - 0.5) * 0.5) * vWin;
+
+      // Lueur brune de fond : les "vides" gardent un gaz très sombre, jamais
+      // un noir mort — le ciel lit comme une nébuleuse pleine, pas un vide.
+      let c = mix(space, warmDeep, clamp01(0.22 + clouds * 0.65) * vWin * 0.6);
+      c = mix(c, warmMid, warm);
+      c = mix(c, warmLight, clamp01(warm * (detail - 0.42) * 1.9));
+      const darkLane = clamp01((lanes - 0.54) * 1.8) * (0.3 + warm);
+      c = mix(c, dust, Math.min(0.8, darkLane * 0.8));
+
+      // Voile bleuté froid vers le haut du ciel (comme la photo).
+      const topAmt = Math.max(0, 0.34 - v) * 1.3 * (0.4 + 0.6 * clouds);
+      c = mix(c, topHaze, Math.min(0.5, topAmt));
+
+      // Cœur lumineux bleu : gaussienne nuageuse calée sur la vue par défaut.
+      let dau = Math.abs(u - uCore);
+      if (dau > 0.5) dau = 1 - dau;
+      const gx = (dau - (warp - 0.5) * 0.05) / 0.17;
+      const gy = (v - vCore) / 0.18;
+      const core = Math.exp(-(gx * gx + gy * gy)) * (0.55 + 0.9 * clouds);
+      c = mix(c, blueDeep, Math.min(0.82, core * 1.15));
+      const glow = Math.pow(core, 2) * 0.7; // noyau additif lumineux
+      c = {
+        r: c.r + blueBright.r * glow,
+        g: c.g + blueBright.g * glow,
+        b: c.b + blueBright.b * glow,
+      };
+
+      const i = (py * width + px) * 4;
+      data[i] = Math.min(255, c.r);
+      data[i + 1] = Math.min(255, c.g);
+      data[i + 2] = Math.min(255, c.b);
+      data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return toTexture(canvas, true, false);
+}
+
 /** Nappe de nuages fins (alpha en bruit fractal, bords fondus). */
 export function cloudTexture(size = 256): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");

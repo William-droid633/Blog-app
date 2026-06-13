@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Instances, Instance, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
-import Galaxy from "./Galaxy";
 import { fbm } from "./noise";
 import {
   marbleSurface,
@@ -17,7 +16,7 @@ import {
   softParticleTexture,
   inscriptionTexture,
   starPositions,
-  skyGradientTexture,
+  nebulaSkyTexture,
   shadowBlobTexture,
   setRepeat,
   cloneSurface,
@@ -66,12 +65,13 @@ function glowCanvas(color: string): HTMLCanvasElement {
   return canvas;
 }
 
-/** Dôme céleste : dégradé atmosphérique du zénith à l'horizon. */
+/** Dôme céleste : nébuleuse colorée (gaz chaud, cœur bleu, poussières)
+ *  enveloppant toute la scène — cf. nebulaSkyTexture. */
 function SkyDome() {
-  const texture = useMemo(() => skyGradientTexture(), []);
+  const texture = useMemo(() => nebulaSkyTexture(), []);
   return (
     <mesh renderOrder={-2}>
-      <sphereGeometry args={[130, 24, 18]} />
+      <sphereGeometry args={[130, 48, 32]} />
       <meshBasicMaterial map={texture} side={THREE.BackSide} fog={false} depthWrite={false} />
     </mesh>
   );
@@ -101,42 +101,61 @@ function Blob({
   );
 }
 
-/** Champ d'étoiles d'appoint sur deux strates, omnidirectionnel : comble
- *  tout le ciel autour de la bande galactique pour qu'aucune direction ne
- *  paraisse vide. */
+/** Champ d'étoiles dense et omnidirectionnel sur trois strates de
+ *  profondeur : un semis fin et brillant devant la nébuleuse, comme sur la
+ *  photographie de référence, pour qu'aucune direction ne paraisse vide. */
 function Stars() {
-  const near = useMemo(() => starPositions(1600, 96), []);
-  const far = useMemo(() => starPositions(2600, 122), []);
+  const bright = useMemo(() => starPositions(800, 98), []);
+  const mid = useMemo(() => starPositions(4200, 110), []);
+  const faint = useMemo(() => starPositions(7000, 122), []);
   const sprite = useMemo(() => softParticleTexture(), []);
   return (
     <group>
       <points>
         <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[near, 3]} />
+          <bufferAttribute attach="attributes-position" args={[bright, 3]} />
         </bufferGeometry>
         <pointsMaterial
-          size={0.42}
+          size={0.6}
           map={sprite}
-          color="#f4eede"
+          color="#fcfaf2"
           transparent
-          opacity={0.9}
+          opacity={0.95}
           sizeAttenuation
           depthWrite={false}
+          blending={THREE.AdditiveBlending}
           fog={false}
         />
       </points>
       <points>
         <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[far, 3]} />
+          <bufferAttribute attach="attributes-position" args={[mid, 3]} />
         </bufferGeometry>
         <pointsMaterial
-          size={0.24}
+          size={0.36}
           map={sprite}
-          color="#aab8d6"
+          color="#e8eefb"
+          transparent
+          opacity={0.8}
+          sizeAttenuation
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          fog={false}
+        />
+      </points>
+      <points>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[faint, 3]} />
+        </bufferGeometry>
+        <pointsMaterial
+          size={0.2}
+          map={sprite}
+          color="#c2cde6"
           transparent
           opacity={0.6}
           sizeAttenuation
           depthWrite={false}
+          blending={THREE.AdditiveBlending}
           fog={false}
         />
       </points>
@@ -1126,10 +1145,9 @@ export default function FacadeScene({
 
   return (
     <>
-      <color attach="background" args={["#05070f"]} />
+      <color attach="background" args={["#05060d"]} />
       <fog attach="fog" args={["#0c0b16", 32, 115]} />
       <SkyDome />
-      <Galaxy count={30000} />
 
       {/* Réflexions d'environnement nocturne (procédural, sans réseau) */}
       <Environment resolution={64} frames={1}>
