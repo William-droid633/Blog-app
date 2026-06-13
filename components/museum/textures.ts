@@ -146,12 +146,16 @@ export function floorSurface(size = 1024): SurfaceMaps {
         color = mix(cream, hexToRgb("#b5a888"), (clouds - 0.5) * 1.1);
         color = mix(color, creamVeinTone, vein * 0.6);
       }
+      // Ton propre à chaque dalle (pierres de provenances diverses) + usure
+      const tileJitter = fbm(ix * 13.7 + 3.1, iy * 9.3 + 8.7, 2) - 0.5;
+      color = mix(color, dark ? hexToRgb("#9fbfa8") : hexToRgb("#8f8468"), Math.max(0, tileJitter) * 0.25);
+      color = mix(color, dark ? hexToRgb("#1a2820") : hexToRgb("#a99c7e"), Math.max(0, -tileJitter) * 0.35);
       color = mix(color, grout, joint);
 
       return {
         color,
         bump: 0.6 - joint * 0.45 + (clouds - 0.5) * 0.06,
-        rough: 0.22 + joint * 0.5 + (clouds - 0.5) * 0.1 + vein * 0.08,
+        rough: 0.22 + joint * 0.5 + (clouds - 0.5) * 0.1 + vein * 0.08 + tileJitter * 0.12,
       };
     })
   );
@@ -339,6 +343,154 @@ export function mosaicTexture(size = 512): THREE.CanvasTexture {
   }
 
   return toTexture(canvas, true);
+}
+
+/**
+ * Caisson de plafond peint : fond bleu nuit nuagé, moulures en retrait
+ * sur les bords, étoile dorée à huit branches au centre — à la manière
+ * des plafonds peints des temples et basiliques romaines.
+ */
+export function cofferTexture(size = 256): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(size);
+
+  // Fond bleu nuit nuagé
+  const img = ctx.createImageData(size, size);
+  const deep = hexToRgb("#161d33");
+  const mid = hexToRgb("#232c4d");
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      const u = px / size;
+      const v = py / size;
+      const n = fbm(u * 5 + 2.3, v * 5 + 7.1, 3);
+      const c = mix(deep, mid, n);
+      const i = (py * size + px) * 4;
+      img.data[i] = c.r;
+      img.data[i + 1] = c.g;
+      img.data[i + 2] = c.b;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Moulures en retrait : cadres successifs, du clair au sombre
+  const frames: Array<[number, string, number]> = [
+    [0.02, "rgba(190, 175, 140, 0.5)", size * 0.014],
+    [0.055, "rgba(20, 16, 10, 0.55)", size * 0.012],
+    [0.085, "rgba(150, 130, 90, 0.35)", size * 0.008],
+  ];
+  for (const [inset, style, width] of frames) {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    const o = size * inset;
+    ctx.strokeRect(o, o, size - o * 2, size - o * 2);
+  }
+
+  // Étoile dorée à huit branches
+  const cx = size / 2;
+  const cy = size / 2;
+  const outer = size * 0.2;
+  const inner = size * 0.075;
+  ctx.beginPath();
+  for (let k = 0; k < 16; k++) {
+    const r = k % 2 === 0 ? outer : inner;
+    const a = (k / 16) * Math.PI * 2 - Math.PI / 2;
+    const px = cx + Math.cos(a) * r;
+    const py = cy + Math.sin(a) * r;
+    if (k === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  const gold = ctx.createRadialGradient(cx, cy, 2, cx, cy, outer);
+  gold.addColorStop(0, "#e8cd9c");
+  gold.addColorStop(0.6, "#c9a36a");
+  gold.addColorStop(1, "#8a6a3c");
+  ctx.fillStyle = gold;
+  ctx.fill();
+  // Points dorés aux écoinçons
+  ctx.fillStyle = "rgba(201, 163, 106, 0.8)";
+  const m = size * 0.16;
+  for (const [px, py] of [
+    [m, m],
+    [size - m, m],
+    [m, size - m],
+    [size - m, size - m],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(px, py, size * 0.018, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  return toTexture(canvas, true, false);
+}
+
+/**
+ * Panneau de fresque pompéienne : champ rouge profond nuagé, plinthe
+ * sombre, cadre noir à filets dorés et médaillon de laurier au centre —
+ * décor du vestibule d'entrée de la galerie.
+ */
+export function frescoPanelTexture(width = 384, height = 512): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(width, height);
+
+  // Champ rouge nuancé
+  const img = ctx.createImageData(width, height);
+  const red = hexToRgb("#82352a");
+  const redDark = hexToRgb("#5e241d");
+  const redLight = hexToRgb("#9c4534");
+  for (let py = 0; py < height; py++) {
+    for (let px = 0; px < width; px++) {
+      const u = px / width;
+      const v = py / height;
+      const n = fbm(u * 4 + 9.2, v * 5.3 + 4.4, 4);
+      let c = mix(red, redLight, Math.max(0, n - 0.5) * 1.4);
+      c = mix(c, redDark, Math.max(0, 0.5 - n) * 1.2 + v * 0.18);
+      const i = (py * width + px) * 4;
+      img.data[i] = c.r;
+      img.data[i + 1] = c.g;
+      img.data[i + 2] = c.b;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Cadre noir et filets dorés
+  ctx.strokeStyle = "#1c120c";
+  ctx.lineWidth = width * 0.05;
+  ctx.strokeRect(width * 0.025, height * 0.02, width * 0.95, height * 0.96);
+  ctx.strokeStyle = "rgba(201, 163, 106, 0.85)";
+  ctx.lineWidth = width * 0.008;
+  ctx.strokeRect(width * 0.07, height * 0.055, width * 0.86, height * 0.89);
+  ctx.strokeStyle = "rgba(201, 163, 106, 0.4)";
+  ctx.lineWidth = width * 0.004;
+  ctx.strokeRect(width * 0.1, height * 0.078, width * 0.8, height * 0.844);
+
+  // Médaillon de laurier
+  const cx = width / 2;
+  const cy = height * 0.46;
+  const r = width * 0.16;
+  ctx.strokeStyle = "rgba(201, 163, 106, 0.9)";
+  ctx.lineWidth = width * 0.012;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  // Feuilles : traits obliques le long du cercle
+  ctx.lineWidth = width * 0.006;
+  for (let k = 0; k < 26; k++) {
+    const a = (k / 26) * Math.PI * 2;
+    const x1 = cx + Math.cos(a) * (r - width * 0.022);
+    const y1 = cy + Math.sin(a) * (r - width * 0.022);
+    const x2 = cx + Math.cos(a + 0.18) * (r + width * 0.03);
+    const y2 = cy + Math.sin(a + 0.18) * (r + width * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(201, 163, 106, 0.65)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, width * 0.02, 0, Math.PI * 2);
+  ctx.fill();
+
+  return toTexture(canvas, true, false);
 }
 
 /** Faisceau de lumière (alpha) pour les éclairages muséaux. */

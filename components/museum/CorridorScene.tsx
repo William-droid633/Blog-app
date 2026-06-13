@@ -8,13 +8,18 @@ import type { Post } from "@/lib/types";
 import Painting, { ART_Y, ART_WIDTH, ART_HEIGHT, type PaintingPlacement } from "./Painting";
 import {
   travertineSurface,
+  ashlarSurface,
   floorSurface,
   marbleSurface,
   fluteTexture,
+  flameTexture,
   lightBeamTexture,
   mosaicTexture,
+  cofferTexture,
+  frescoPanelTexture,
   starPositions,
   setRepeat,
+  cloneSurface,
   type SurfaceMaps,
 } from "./textures";
 
@@ -22,10 +27,13 @@ import {
 export const HALL_WIDTH = 8;
 export const HALL_HEIGHT = 6;
 export const EYE_HEIGHT = 1.7;
-export const START_Z = 5;
-const FIRST_ART_Z = -6;
+/* On apparaît dans le vestibule décoré, tout près des premières œuvres. */
+export const START_Z = 3;
+const FIRST_ART_Z = -4.5;
 const ART_STEP = 4.5;
 const WALL_X = HALL_WIDTH / 2;
+/* Seuil entre le vestibule d'entrée et la galerie proprement dite. */
+const PORTAL_Z = FIRST_ART_Z + ART_STEP / 2;
 /** Léger décollement du mur : l'œuvre est inclinée vers le visiteur. */
 const ART_OFFSET = 0.42;
 /** Angle d'orientation de la toile vers l'allée centrale (≈ 11°). */
@@ -156,18 +164,18 @@ function FollowLights() {
     const flicker = 1 + Math.sin(clock.elapsedTime * 7.3) * 0.05;
     if (ahead.current) {
       ahead.current.position.set(0, 4.4, camera.position.z - 7);
-      ahead.current.intensity = 30 * flicker;
+      ahead.current.intensity = 32 * flicker;
     }
     if (behind.current) {
       behind.current.position.set(0, 4.2, camera.position.z + 4);
-      behind.current.intensity = 15;
+      behind.current.intensity = 16;
     }
   });
 
   return (
     <>
-      <pointLight ref={ahead} color="#e8cd9c" intensity={30} distance={24} decay={2} />
-      <pointLight ref={behind} color="#d9b87a" intensity={15} distance={16} decay={2} />
+      <pointLight ref={ahead} color="#e8cd9c" intensity={32} distance={24} decay={2} />
+      <pointLight ref={behind} color="#d9b87a" intensity={16} distance={16} decay={2} />
     </>
   );
 }
@@ -375,10 +383,148 @@ function Skylight({ z, beam }: { z: number; beam: THREE.Texture }) {
 }
 
 /**
+ * Demi-colonne engagée : plinthe, base en tore, fût cannelé, échine et
+ * abaque — scande les murs de la galerie en répondant aux œuvres.
+ */
+function EngagedColumn({
+  z,
+  side,
+  marble,
+  flutes,
+  scale = 1,
+}: {
+  z: number;
+  side: number;
+  marble: SurfaceMaps;
+  flutes: THREE.Texture;
+  scale?: number;
+}) {
+  return (
+    <group position={[side * (WALL_X + 0.08), 0, z]} scale={[scale, 1, scale]}>
+      <mesh position={[0, 0.14, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.8, 0.28, 0.8]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      <mesh position={[0, 0.37, 0]} castShadow>
+        <cylinderGeometry args={[0.34, 0.4, 0.18, 20]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      {/* Fût cannelé légèrement galbé */}
+      <mesh position={[0, 2.51, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.26, 0.3, 4.1, 22]} />
+        <meshStandardMaterial
+          map={marble.map}
+          roughnessMap={marble.roughnessMap}
+          bumpMap={flutes}
+          bumpScale={1.2}
+        />
+      </mesh>
+      <mesh position={[0, 4.64, 0]} castShadow>
+        <cylinderGeometry args={[0.34, 0.27, 0.16, 20]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      <mesh position={[0, 4.8, 0]} castShadow>
+        <boxGeometry args={[0.74, 0.16, 0.74]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Applique murale : coupelle de bronze et flamme vive (sans coût lumineux). */
+function WallFlame({ z, side, flame }: { z: number; side: number; flame: THREE.Texture }) {
+  const flameRef = useRef<THREE.Mesh>(null);
+  const halo = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+    const gradient = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+    gradient.addColorStop(0, "rgba(255, 170, 70, 0.8)");
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(canvas);
+  }, []);
+
+  const flamePlane = useMemo(() => {
+    const g = new THREE.PlaneGeometry(0.3, 0.56);
+    g.translate(0, 0.28, 0);
+    return g;
+  }, []);
+
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    const f = 0.85 + Math.sin(t * 8.3 + z) * 0.1 + Math.sin(t * 19 + z * 2) * 0.05;
+    if (flameRef.current) flameRef.current.scale.set(0.95, f, 1);
+  });
+
+  const rotationY = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+  return (
+    <group position={[side * (WALL_X - 0.3), 3.9, z]} rotation={[0, rotationY, 0]}>
+      {/* Potence et coupelle */}
+      <mesh position={[0, -0.12, -0.12]} rotation={[0.5, 0, 0]} castShadow>
+        <cylinderGeometry args={[0.025, 0.035, 0.36, 8]} />
+        <meshStandardMaterial color="#4a3a22" metalness={0.82} roughness={0.4} />
+      </mesh>
+      <mesh position={[0, 0, 0]} castShadow>
+        <cylinderGeometry args={[0.13, 0.05, 0.12, 12]} />
+        <meshStandardMaterial color="#54421f" metalness={0.8} roughness={0.4} />
+      </mesh>
+      {/* Braise et flamme */}
+      <mesh position={[0, 0.06, 0]} scale={[1, 0.4, 1]}>
+        <sphereGeometry args={[0.09, 10, 8]} />
+        <meshStandardMaterial color="#2b1206" emissive="#ff5a1a" emissiveIntensity={2} roughness={0.9} toneMapped={false} />
+      </mesh>
+      <mesh ref={flameRef} geometry={flamePlane} position={[0, 0.08, 0]}>
+        <meshBasicMaterial
+          map={flame}
+          transparent
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+      <sprite scale={[0.9, 0.9, 1]} position={[0, 0.2, 0]}>
+        <spriteMaterial map={halo} transparent opacity={0.4} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </sprite>
+    </group>
+  );
+}
+
+/** Panneau de fresque encadré du vestibule d'entrée. */
+function FrescoPanel({
+  z,
+  side,
+  texture,
+  marble,
+}: {
+  z: number;
+  side: number;
+  texture: THREE.Texture;
+  marble: SurfaceMaps;
+}) {
+  const rotationY = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+  return (
+    <group position={[side * (WALL_X - 0.08), 2.55, z]} rotation={[0, rotationY, 0]}>
+      <mesh castShadow>
+        <boxGeometry args={[2.7, 3.1, 0.08]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
+      </mesh>
+      <mesh position={[0, 0, 0.05]}>
+        <planeGeometry args={[2.42, 2.82]} />
+        <meshStandardMaterial map={texture} roughness={0.85} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
  * Le grand couloir d'exposition : dallage damier crème / vert antique
- * réfléchissant, tapis de mosaïque, murs de travertin à cimaises dorées,
- * pilastres cannelés, plafond à caissons et rosettes, puits de lumière
- * lunaire, niches à amphores, bancs de marbre, abside MEMORIA.
+ * réfléchissant, tapis de mosaïque, murs en grand appareil scandés de
+ * demi-colonnes, frise pompéienne, plafond à caissons peints (bleu nuit
+ * étoilé d'or), vestibule d'entrée à fresques, appliques à flamme,
+ * niches à amphores, bancs, abside MEMORIA.
  */
 export default function CorridorScene({
   posts,
@@ -402,7 +548,8 @@ export default function CorridorScene({
   const length = topZ - bottomZ;
   const centerZ = (topZ + bottomZ) / 2;
 
-  const wall = useMemo(() => setRepeat(travertineSurface(), length / 5, 1.8), [length]);
+  const wall = useMemo(() => setRepeat(cloneSurface(ashlarSurface()), length / 6, 1), [length]);
+  const entranceWall = useMemo(() => setRepeat(travertineSurface(), 2.2, 1.6), []);
   const floor = useMemo(() => setRepeat(floorSurface(), 2, length / 8), [length]);
   const marble = useMemo(() => marbleSurface(), []);
   const mosaic = useMemo(() => {
@@ -410,11 +557,14 @@ export default function CorridorScene({
     t.repeat.set(1, length / 2.6);
     return t;
   }, [length]);
+  const coffer = useMemo(() => cofferTexture(), []);
+  const fresco = useMemo(() => frescoPanelTexture(), []);
   const flutes = useMemo(() => {
     const t = fluteTexture();
     t.repeat.set(2, 1);
     return t;
   }, []);
+  const flame = useMemo(() => flameTexture(), []);
   const beam = useMemo(() => lightBeamTexture(), []);
   const skyStars = useMemo(() => starPositions(300, 60), []);
 
@@ -423,13 +573,15 @@ export default function CorridorScene({
     camera.lookAt(0, EYE_HEIGHT, travelZ.current - 10);
   }, [camera, travelZ]);
 
-  const pilasterZs = useMemo(() => {
+  const columnZs = useMemo(() => {
     const list: number[] = [];
-    for (let z = FIRST_ART_Z + ART_STEP / 2; z > bottomZ + 2; z -= ART_STEP) {
+    for (let z = PORTAL_Z - ART_STEP; z > bottomZ + 2; z -= ART_STEP) {
       list.push(z);
     }
     return list;
   }, [bottomZ]);
+
+  const sconceZs = useMemo(() => columnZs.filter((_, i) => i % 2 === 0), [columnZs]);
 
   const cofferZs = useMemo(() => {
     const list: number[] = [];
@@ -439,15 +591,8 @@ export default function CorridorScene({
     return list;
   }, [topZ, bottomZ]);
 
-  const rosettes = useMemo(() => {
-    const list: Array<[number, number]> = [];
-    cofferZs.forEach((z, i) => {
-      if (i === 0) return;
-      const bayZ = z + 1.5;
-      [-3, 0, 3].forEach((x) => list.push([x, bayZ]));
-    });
-    return list;
-  }, [cofferZs]);
+  /* Centres des caissons : un par travée entre deux poutres. */
+  const bayZs = useMemo(() => cofferZs.slice(1).map((z) => z + 1.5), [cofferZs]);
 
   const skylightZs = useMemo(() => {
     const list: number[] = [];
@@ -514,7 +659,7 @@ export default function CorridorScene({
         <meshStandardMaterial map={mosaic} roughness={0.62} />
       </mesh>
 
-      {/* Murs de travertin */}
+      {/* Murs en grand appareil */}
       <mesh position={[-WALL_X - 0.2, HALL_HEIGHT / 2, centerZ]} receiveShadow>
         <boxGeometry args={[0.4, HALL_HEIGHT, length]} />
         <meshStandardMaterial {...wall} bumpScale={0.9} />
@@ -524,7 +669,7 @@ export default function CorridorScene({
         <meshStandardMaterial {...wall} bumpScale={0.9} />
       </mesh>
 
-      {/* Soubassement, cimaises dorées, corniche */}
+      {/* Soubassement, cimaises dorées, frise pompéienne, corniche */}
       {[-1, 1].map((side) => (
         <group key={side}>
           <mesh position={[side * (WALL_X - 0.04), 0.5, centerZ]} receiveShadow>
@@ -535,8 +680,17 @@ export default function CorridorScene({
             <boxGeometry args={[0.12, 0.09, length]} />
             <meshStandardMaterial color="#8a6a3c" metalness={0.78} roughness={0.32} />
           </mesh>
-          <mesh position={[side * (WALL_X - 0.07), HALL_HEIGHT - 0.62, centerZ]}>
-            <boxGeometry args={[0.12, 0.08, length]} />
+          {/* Frise rouge de Pompéi entre deux filets dorés */}
+          <mesh position={[side * (WALL_X - 0.05), 5.14, centerZ]}>
+            <boxGeometry args={[0.07, 0.5, length]} />
+            <meshStandardMaterial color="#71281f" roughness={0.8} />
+          </mesh>
+          <mesh position={[side * (WALL_X - 0.06), 4.86, centerZ]}>
+            <boxGeometry args={[0.09, 0.06, length]} />
+            <meshStandardMaterial color="#8a6a3c" metalness={0.78} roughness={0.32} />
+          </mesh>
+          <mesh position={[side * (WALL_X - 0.06), 5.42, centerZ]}>
+            <boxGeometry args={[0.09, 0.06, length]} />
             <meshStandardMaterial color="#8a6a3c" metalness={0.78} roughness={0.32} />
           </mesh>
           <mesh position={[side * (WALL_X - 0.08), HALL_HEIGHT - 0.38, centerZ]} castShadow>
@@ -546,36 +700,61 @@ export default function CorridorScene({
         </group>
       ))}
 
-      {/* Pilastres cannelés */}
-      {pilasterZs.map((z) =>
+      {/* Demi-colonnes engagées scandant la galerie */}
+      {columnZs.map((z) =>
         [-1, 1].map((side) => (
-          <group key={`${z}-${side}`} position={[side * (WALL_X - 0.24), 0, z]}>
-            <mesh position={[0, 0.27, 0]} castShadow receiveShadow>
-              <boxGeometry args={[0.54, 0.54, 0.96]} />
-              <meshStandardMaterial {...marble} bumpScale={0.5} />
-            </mesh>
-            <mesh position={[0, HALL_HEIGHT / 2, 0]} castShadow receiveShadow>
-              <boxGeometry args={[0.38, HALL_HEIGHT - 1.4, 0.74]} />
-              <meshStandardMaterial
-                map={marble.map}
-                roughnessMap={marble.roughnessMap}
-                bumpMap={flutes}
-                bumpScale={1.2}
-              />
-            </mesh>
-            <mesh position={[0, HALL_HEIGHT - 0.82, 0]} castShadow>
-              <boxGeometry args={[0.56, 0.28, 0.98]} />
-              <meshStandardMaterial {...marble} bumpScale={0.5} />
-            </mesh>
-          </group>
+          <EngagedColumn key={`${z}-${side}`} z={z} side={side} marble={marble} flutes={flutes} />
+        ))
+      )}
+      {/* Appliques à flamme sur une colonne sur deux */}
+      {sconceZs.map((z) =>
+        [-1, 1].map((side) => (
+          <WallFlame key={`sconce-${z}-${side}`} z={z} side={side} flame={flame} />
         ))
       )}
 
-      {/* Plafond à caissons et rosettes dorées */}
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, HALL_HEIGHT, centerZ]}>
-        <planeGeometry args={[HALL_WIDTH + 1, length]} />
-        <meshStandardMaterial color="#221a11" roughness={0.92} />
+      {/* ——— Vestibule d'entrée : fresques et portail d'honneur ——— */}
+      <FrescoPanel z={4.1} side={-1} texture={fresco} marble={marble} />
+      <FrescoPanel z={4.1} side={1} texture={fresco} marble={marble} />
+      <FrescoPanel z={0.9} side={-1} texture={fresco} marble={marble} />
+      <FrescoPanel z={0.9} side={1} texture={fresco} marble={marble} />
+      {/* Portail marquant l'entrée de la galerie */}
+      {[-1, 1].map((side) => (
+        <EngagedColumn key={`portal-${side}`} z={PORTAL_Z} side={side} marble={marble} flutes={flutes} scale={1.35} />
+      ))}
+      <mesh position={[0, 5.18, PORTAL_Z]} castShadow receiveShadow>
+        <boxGeometry args={[HALL_WIDTH + 0.2, 0.62, 1.15]} />
+        <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
+      <mesh position={[0, 4.83, PORTAL_Z]}>
+        <boxGeometry args={[HALL_WIDTH + 0.1, 0.08, 1.2]} />
+        <meshStandardMaterial color="#8a6a3c" metalness={0.78} roughness={0.32} />
+      </mesh>
+
+      {/* ——— Plafond à caissons peints ——— */}
+      {/* Fond du comble au-dessus des caissons */}
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, HALL_HEIGHT + 0.4, centerZ]}>
+        <planeGeometry args={[HALL_WIDTH + 1, length]} />
+        <meshStandardMaterial color="#14100b" roughness={0.95} />
+      </mesh>
+      {/* Panneaux peints en retrait : bleu nuit étoilé d'or */}
+      <Instances limit={bayZs.length}>
+        <planeGeometry args={[3.5, 2.42]} />
+        <meshStandardMaterial map={coffer} roughness={0.85} />
+        {bayZs.map((z) => (
+          <Instance key={`cc-${z}`} position={[0, HALL_HEIGHT + 0.3, z]} rotation={[Math.PI / 2, 0, 0]} />
+        ))}
+      </Instances>
+      <Instances limit={bayZs.length * 2}>
+        <planeGeometry args={[1.7, 2.42]} />
+        <meshStandardMaterial map={coffer} roughness={0.85} />
+        {bayZs.map((z) =>
+          [-3.05, 3.05].map((x) => (
+            <Instance key={`cs-${z}-${x}`} position={[x, HALL_HEIGHT + 0.3, z]} rotation={[Math.PI / 2, 0, 0]} />
+          ))
+        )}
+      </Instances>
+      {/* Poutres transversales et longitudinales */}
       {cofferZs.map((z) => (
         <mesh key={z} position={[0, HALL_HEIGHT - 0.2, z]} castShadow>
           <boxGeometry args={[HALL_WIDTH + 0.6, 0.4, 0.52]} />
@@ -583,17 +762,36 @@ export default function CorridorScene({
         </mesh>
       ))}
       {[-HALL_WIDTH / 4, HALL_WIDTH / 4].map((x) => (
-        <mesh key={x} position={[x, HALL_HEIGHT - 0.2, centerZ]}>
-          <boxGeometry args={[0.42, 0.4, length]} />
-          <meshStandardMaterial {...marble} bumpScale={0.5} />
-        </mesh>
+        <group key={x}>
+          <mesh position={[x, HALL_HEIGHT - 0.2, centerZ]}>
+            <boxGeometry args={[0.42, 0.4, length]} />
+            <meshStandardMaterial {...marble} bumpScale={0.5} />
+          </mesh>
+          {/* Filet doré soulignant la poutre */}
+          <mesh position={[x, HALL_HEIGHT - 0.42, centerZ]}>
+            <boxGeometry args={[0.46, 0.05, length]} />
+            <meshStandardMaterial color="#8a6a3c" metalness={0.78} roughness={0.32} />
+          </mesh>
+        </group>
       ))}
-      <Instances limit={rosettes.length}>
-        <sphereGeometry args={[0.1, 12, 8]} />
+      {/* Rosettes dorées au cœur des caissons */}
+      <Instances limit={bayZs.length * 3}>
+        <sphereGeometry args={[0.09, 12, 8]} />
+        <meshStandardMaterial color="#c9a36a" metalness={0.85} roughness={0.3} />
+        {bayZs.map((z) =>
+          [-3.05, 0, 3.05].map((x) => (
+            <Instance key={`r-${z}-${x}`} position={[x, HALL_HEIGHT + 0.18, z]} scale={[1, 0.5, 1]} />
+          ))
+        )}
+      </Instances>
+      <Instances limit={bayZs.length * 3}>
+        <torusGeometry args={[0.17, 0.025, 8, 20]} />
         <meshStandardMaterial color="#a8854a" metalness={0.82} roughness={0.32} />
-        {rosettes.map(([x, z], i) => (
-          <Instance key={i} position={[x, HALL_HEIGHT - 0.07, z]} scale={[1, 0.45, 1]} />
-        ))}
+        {bayZs.map((z) =>
+          [-3.05, 0, 3.05].map((x) => (
+            <Instance key={`t-${z}-${x}`} position={[x, HALL_HEIGHT + 0.22, z]} rotation={[Math.PI / 2, 0, 0]} />
+          ))
+        )}
       </Instances>
 
       {/* Puits de lumière lunaire + étoiles visibles à travers */}
@@ -610,16 +808,58 @@ export default function CorridorScene({
       {/* Poussière dans la lumière */}
       <DustMotes topZ={topZ} bottomZ={bottomZ} count={highQuality ? 700 : 300} />
 
-      {/* Mur d'entrée derrière le visiteur */}
+      {/* ——— Mur d'entrée : la porte de bronze par laquelle on est venu ——— */}
       <mesh position={[0, HALL_HEIGHT / 2, topZ + 0.2]} receiveShadow>
         <boxGeometry args={[HALL_WIDTH + 1, HALL_HEIGHT, 0.4]} />
-        <meshStandardMaterial {...wall} bumpScale={0.9} />
+        <meshStandardMaterial {...entranceWall} bumpScale={0.9} />
       </mesh>
+      <group position={[0, 0, topZ - 0.02]}>
+        {/* Encadrement */}
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 2.5, 2.7, 0]} castShadow>
+            <boxGeometry args={[0.5, 5.4, 0.3]} />
+            <meshStandardMaterial {...marble} bumpScale={0.5} />
+          </mesh>
+        ))}
+        <mesh position={[0, 5.52, 0]} castShadow>
+          <boxGeometry args={[5.8, 0.48, 0.32]} />
+          <meshStandardMaterial {...marble} bumpScale={0.5} />
+        </mesh>
+        <mesh position={[0, 0.07, 0.1]}>
+          <boxGeometry args={[5.2, 0.14, 0.5]} />
+          <meshStandardMaterial {...marble} bumpScale={0.4} color="#cfc6b0" />
+        </mesh>
+        {/* Vantaux de bronze refermés derrière le visiteur */}
+        {[-1, 1].map((s) => (
+          <group key={`leaf-${s}`} position={[s * 1.08, 2.62, -0.06]}>
+            <mesh>
+              <boxGeometry args={[2.08, 5.1, 0.14]} />
+              <meshStandardMaterial color="#4a3a22" metalness={0.78} roughness={0.42} />
+            </mesh>
+            {[1.65, 0, -1.65].map((py) => (
+              <mesh key={py} position={[0, py, 0.08]}>
+                <boxGeometry args={[1.46, 1.32, 0.05]} />
+                <meshStandardMaterial color="#5d4322" metalness={0.8} roughness={0.38} />
+              </mesh>
+            ))}
+            {[1.65, 0, -1.65].map((py) => (
+              <mesh key={`boss-${py}`} position={[0, py, 0.13]}>
+                <sphereGeometry args={[0.09, 10, 8]} />
+                <meshStandardMaterial color="#8a6530" metalness={0.88} roughness={0.3} />
+              </mesh>
+            ))}
+          </group>
+        ))}
+        <mesh position={[0, 2.62, 0.04]}>
+          <boxGeometry args={[0.12, 5.05, 0.1]} />
+          <meshStandardMaterial color="#6e5026" metalness={0.82} roughness={0.34} />
+        </mesh>
+      </group>
 
       {/* Abside MEMORIA au bout du couloir */}
       <mesh position={[0, HALL_HEIGHT / 2, bottomZ]} receiveShadow>
         <cylinderGeometry args={[HALL_WIDTH / 2, HALL_WIDTH / 2, HALL_HEIGHT, 28, 1, true, Math.PI / 2, Math.PI]} />
-        <meshStandardMaterial {...wall} bumpScale={0.9} side={THREE.BackSide} />
+        <meshStandardMaterial {...entranceWall} bumpScale={0.9} side={THREE.BackSide} />
       </mesh>
       <group position={[0, 0, bottomZ + 1.6]}>
         <mesh position={[0, 0.85, 0]} castShadow receiveShadow>
