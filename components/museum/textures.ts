@@ -797,7 +797,7 @@ export function skyGradientTexture(): THREE.CanvasTexture {
  * zénith. La nébuleuse couvre tout le ciel pour qu'aucune direction ne
  * paraisse vide, mais culmine dans la bande mi-haute que cadre la caméra.
  */
-export function nebulaSkyTexture(width = 1024, height = 512): THREE.CanvasTexture {
+export function nebulaSkyTexture(width = 1536, height = 768): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -805,57 +805,77 @@ export function nebulaSkyTexture(width = 1024, height = 512): THREE.CanvasTextur
   const img = ctx.createImageData(width, height);
   const data = img.data;
 
-  // Palette relevée sur la photographie de référence.
-  const space = hexToRgb("#05060d"); // fond spatial profond
-  const warmDeep = hexToRgb("#2a1a0f"); // lueur brune des "vides"
-  const warmMid = hexToRgb("#a8743f"); // gaz chaud ocre
-  const warmLight = hexToRgb("#e6bb8a"); // crêtes tan éclairées
-  const dust = hexToRgb("#341f14"); // voies de poussière sombres
-  const topHaze = hexToRgb("#2b3c5e"); // voile bleuté du haut
-  const blueDeep = hexToRgb("#3a5c84"); // halo bleu du cœur
-  const blueBright = hexToRgb("#bcd6f4"); // noyau lumineux
+  // Palette relevée sur la photographie : du noir spatial aux émissions
+  // chaudes (rouge Hα → orange → tan → crêtes crème), poussières sombres,
+  // régions de réflexion bleues et un soupçon d'émission rosée.
+  const space = hexToRgb("#04050c"); // fond spatial profond
+  const warmDeep = hexToRgb("#241405"); // lueur brune des "vides"
+  const ember = hexToRgb("#7a2f17"); // émission rouge profonde
+  const orange = hexToRgb("#bf6a2f"); // gaz chaud
+  const tan = hexToRgb("#d99a5e"); // nappes éclairées
+  const cream = hexToRgb("#f3d6a4"); // crêtes les plus vives
+  const dust = hexToRgb("#160d07"); // voies de poussière sombres
+  const pinkEmis = hexToRgb("#7c3f63"); // émission rosée discrète
+  const topHaze = hexToRgb("#26375a"); // voile bleuté du haut
+  const blueReflect = hexToRgb("#41618c"); // halo bleu de réflexion
+  const blueBright = hexToRgb("#c2d8f4"); // noyaux lumineux bleus
 
   const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
-
-  // Centre du cœur lumineux : azimut du temple (−Z) et bande mi-haute.
-  const uCore = 0.75;
-  const vCore = 0.4;
 
   for (let py = 0; py < height; py++) {
     const v = py / height;
     for (let px = 0; px < width; px++) {
       const u = px / width;
 
-      // Structure des nuages, déformée par un bruit basse fréquence.
-      const warp = fbm(u * 3 + 11.5, v * 3 + 4.2, 3);
-      const clouds = fbm(u * 6 + warp * 1.8 + 21, v * 6 + warp * 1.8 + 7, 5);
-      const detail = fbm(u * 15 + 5, v * 15 + 33, 4);
-      const lanes = turbulence(u * 9 + 2, v * 9 + 8, 4);
+      // Déformation du domaine : tord les nappes en volutes turbulentes.
+      const wx = fbm(u * 2 + 3.1, v * 2 + 1.7, 4) - 0.5;
+      const wy = fbm(u * 2 + 8.3, v * 2 + 5.2, 4) - 0.5;
+      const su = u + wx * 0.32;
+      const sv = v + wy * 0.32;
 
-      // Les nappes culminent dans la bande mi-haute, sans jamais s'éteindre.
-      const vWin = Math.max(0.34, Math.min(1, 1.18 - Math.abs(v - 0.4) * 1.0));
-      const warm = clamp01((clouds - 0.38) * 2 + (detail - 0.5) * 0.5) * vWin;
+      // Densité de gaz multi-échelle (grandes masses → grain fin).
+      const big = fbm(su * 5 + 21, sv * 5 + 7, 6);
+      const mid = fbm(su * 12 + 10, sv * 12 + 4, 5);
+      const fine = fbm(su * 27 + 20, sv * 27 + 9, 4);
+      const density = big * 0.6 + mid * 0.28 + fine * 0.18;
 
-      // Lueur brune de fond : les "vides" gardent un gaz très sombre, jamais
-      // un noir mort — le ciel lit comme une nébuleuse pleine, pas un vide.
-      let c = mix(space, warmDeep, clamp01(0.22 + clouds * 0.65) * vWin * 0.6);
-      c = mix(c, warmMid, warm);
-      c = mix(c, warmLight, clamp01(warm * (detail - 0.42) * 1.9));
-      const darkLane = clamp01((lanes - 0.54) * 1.8) * (0.3 + warm);
-      c = mix(c, dust, Math.min(0.8, darkLane * 0.8));
+      // Filaments lumineux et veines de poussière : crêtes de bruit « ridé »
+      // (là où la turbulence est minimale) → tendons fins, pas des taches.
+      const filament = Math.pow(Math.max(0, 1 - turbulence(su * 15 + 5, sv * 15 + 2, 5) * 1.2), 2.3);
+      const dustRidge = Math.pow(Math.max(0, 1 - turbulence(su * 19 + 31, sv * 19 + 13, 5) * 1.15), 2.6);
 
-      // Voile bleuté froid vers le haut du ciel (comme la photo).
-      const topAmt = Math.max(0, 0.34 - v) * 1.3 * (0.4 + 0.6 * clouds);
-      c = mix(c, topHaze, Math.min(0.5, topAmt));
+      // Enveloppe verticale : dense en bande mi-haute, jamais tout à fait nulle.
+      const vWin = Math.max(0.32, Math.min(1, 1.2 - Math.abs(v - 0.4) * 1.0));
+      const warm = clamp01((density - 0.42) * 2.1) * vWin;
 
-      // Cœur lumineux bleu : gaussienne nuageuse calée sur la vue par défaut.
-      let dau = Math.abs(u - uCore);
+      // Empilement des émissions chaudes, du fond brun aux crêtes crème.
+      let c = mix(space, warmDeep, clamp01(0.25 + density * 0.7) * vWin * 0.7);
+      c = mix(c, ember, warm * 0.55);
+      c = mix(c, orange, clamp01(warm * (0.4 + mid)) * 0.85);
+      c = mix(c, tan, clamp01(warm * (0.3 + filament)));
+      c = mix(c, cream, clamp01((warm * filament - 0.35) * 2.2));
+      c = mix(c, pinkEmis, clamp01((warm - 0.6) * 1.2) * 0.22);
+      // Poussières sombres qui découpent le gaz en veines nettes.
+      c = mix(c, dust, Math.min(0.82, clamp01(dustRidge - 0.15) * (0.4 + warm) * 1.1));
+
+      // Voile bleuté froid vers le haut du ciel.
+      const topAmt = Math.max(0, 0.32 - v) * 1.4 * (0.4 + 0.6 * big);
+      c = mix(c, topHaze, Math.min(0.45, topAmt));
+
+      // Réflexion bleue : grand cœur calé sur la vue par défaut (−Z, le
+      // temple) + une seconde tache plus petite et discrète, pour varier.
+      let dau = Math.abs(u - 0.75);
       if (dau > 0.5) dau = 1 - dau;
-      const gx = (dau - (warp - 0.5) * 0.05) / 0.17;
-      const gy = (v - vCore) / 0.18;
-      const core = Math.exp(-(gx * gx + gy * gy)) * (0.55 + 0.9 * clouds);
-      c = mix(c, blueDeep, Math.min(0.82, core * 1.15));
-      const glow = Math.pow(core, 2) * 0.7; // noyau additif lumineux
+      const gx = (dau - wx * 0.06) / 0.17;
+      const gy = (v - 0.4) / 0.18;
+      const core1 = Math.exp(-(gx * gx + gy * gy)) * (0.5 + 0.9 * big);
+      let dau2 = Math.abs(u - 0.3);
+      if (dau2 > 0.5) dau2 = 1 - dau2;
+      const gx2 = dau2 / 0.1;
+      const gy2 = (v - 0.5) / 0.12;
+      const core2 = Math.exp(-(gx2 * gx2 + gy2 * gy2)) * (0.4 + 0.8 * mid) * 0.5;
+      c = mix(c, blueReflect, Math.min(0.8, Math.max(core1, core2) * 1.1));
+      const glow = Math.pow(core1, 2) * 0.85 + Math.pow(core2, 2) * 0.4;
       c = {
         r: c.r + blueBright.r * glow,
         g: c.g + blueBright.g * glow,
@@ -871,6 +891,53 @@ export function nebulaSkyTexture(width = 1024, height = 512): THREE.CanvasTextur
   }
   ctx.putImageData(img, 0, 0);
   return toTexture(canvas, true, false);
+}
+
+/**
+ * Étoile brillante avec aigrettes de diffraction : noyau rond éclatant et
+ * croix à quatre branches (plus deux diagonales discrètes), comme les
+ * étoiles les plus vives d'une astrophotographie. Blanche et additive — la
+ * teinte vient de la couleur du point ; le bloom de la scène l'amplifie.
+ */
+export function starGlintTexture(size = 128): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(size);
+  const c = size / 2;
+  ctx.globalCompositeOperation = "lighter";
+
+  // Noyau lumineux
+  const core = ctx.createRadialGradient(c, c, 0, c, c, size * 0.18);
+  core.addColorStop(0, "rgba(255,255,255,1)");
+  core.addColorStop(0.45, "rgba(255,255,255,0.55)");
+  core.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = core;
+  ctx.fillRect(0, 0, size, size);
+
+  // Aigrettes : fuseaux fondus rayonnant du centre.
+  const spike = (angle: number, len: number, halfWidth: number, alpha: number) => {
+    for (const dir of [1, -1]) {
+      ctx.save();
+      ctx.translate(c, c);
+      ctx.rotate(angle);
+      const g = ctx.createLinearGradient(0, 0, dir * len, 0);
+      g.addColorStop(0, `rgba(255,255,255,${alpha})`);
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(0, -halfWidth);
+      ctx.lineTo(dir * len, 0);
+      ctx.lineTo(0, halfWidth);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  };
+  spike(0, size * 0.46, size * 0.012, 0.9);
+  spike(Math.PI / 2, size * 0.46, size * 0.012, 0.9);
+  spike(Math.PI / 4, size * 0.28, size * 0.007, 0.32);
+  spike(-Math.PI / 4, size * 0.28, size * 0.007, 0.32);
+
+  ctx.globalCompositeOperation = "source-over";
+  return toTexture(canvas, false, false);
 }
 
 /** Nappe de nuages fins (alpha en bruit fractal, bords fondus). */

@@ -17,6 +17,7 @@ import {
   inscriptionTexture,
   starPositions,
   nebulaSkyTexture,
+  starGlintTexture,
   shadowBlobTexture,
   setRepeat,
   cloneSurface,
@@ -101,64 +102,77 @@ function Blob({
   );
 }
 
-/** Champ d'étoiles dense et omnidirectionnel sur trois strates de
- *  profondeur : un semis fin et brillant devant la nébuleuse, comme sur la
- *  photographie de référence, pour qu'aucune direction ne paraisse vide. */
-function Stars() {
-  const bright = useMemo(() => starPositions(800, 98), []);
-  const mid = useMemo(() => starPositions(4200, 110), []);
-  const faint = useMemo(() => starPositions(7000, 122), []);
-  const sprite = useMemo(() => softParticleTexture(), []);
+/** Couleurs stellaires réalistes : surtout des étoiles blanches et chaudes,
+ *  quelques bleu-blanc (chaudes) et de rares ambres (froides), avec une
+ *  luminosité en loi de puissance — une foule de faibles, de rares vives. */
+function starColors(count: number, brightness: number): Float32Array {
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const r = Math.random();
+    let cr: number;
+    let cg: number;
+    let cb: number;
+    if (r < 0.18) {
+      cr = 0.72; cg = 0.8; cb = 1.0; // bleu-blanc
+    } else if (r < 0.48) {
+      cr = 1.0; cg = 0.98; cb = 0.95; // blanc
+    } else if (r < 0.72) {
+      cr = 1.0; cg = 0.93; cb = 0.82; // blanc chaud
+    } else if (r < 0.9) {
+      cr = 1.0; cg = 0.86; cb = 0.66; // jaune pâle
+    } else {
+      cr = 1.0; cg = 0.74; cb = 0.5; // ambre
+    }
+    const b = brightness * (0.35 + 0.65 * Math.pow(Math.random(), 2));
+    colors[i * 3] = cr * b;
+    colors[i * 3 + 1] = cg * b;
+    colors[i * 3 + 2] = cb * b;
+  }
+  return colors;
+}
+
+/** Champ d'étoiles dense et omnidirectionnel sur cinq strates de profondeur :
+ *  semis fin et coloré devant la nébuleuse (du carpet de faibles aux vives à
+ *  aigrettes de diffraction), pour la densité d'une astrophotographie. */
+function Stars({ highQuality }: { highQuality: boolean }) {
+  const soft = useMemo(() => softParticleTexture(), []);
+  const glint = useMemo(() => starGlintTexture(), []);
+  const layers = useMemo(() => {
+    const q = highQuality ? 1 : 0.55;
+    const defs = [
+      { count: Math.round(60 * (highQuality ? 1 : 0.7)), radius: 100, size: 1.15, brightness: 1.0, glint: true },
+      { count: Math.round(700 * q), radius: 104, size: 0.6, brightness: 0.95, glint: false },
+      { count: Math.round(4200 * q), radius: 112, size: 0.38, brightness: 0.8, glint: false },
+      { count: Math.round(9000 * q), radius: 120, size: 0.22, brightness: 0.62, glint: false },
+      { count: Math.round(14000 * q), radius: 126, size: 0.15, brightness: 0.5, glint: false },
+    ];
+    return defs.map((d) => ({
+      ...d,
+      positions: starPositions(d.count, d.radius),
+      colors: starColors(d.count, d.brightness),
+    }));
+  }, [highQuality]);
+
   return (
     <group>
-      <points>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[bright, 3]} />
-        </bufferGeometry>
-        <pointsMaterial
-          size={0.6}
-          map={sprite}
-          color="#fcfaf2"
-          transparent
-          opacity={0.95}
-          sizeAttenuation
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          fog={false}
-        />
-      </points>
-      <points>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[mid, 3]} />
-        </bufferGeometry>
-        <pointsMaterial
-          size={0.36}
-          map={sprite}
-          color="#e8eefb"
-          transparent
-          opacity={0.8}
-          sizeAttenuation
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          fog={false}
-        />
-      </points>
-      <points>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[faint, 3]} />
-        </bufferGeometry>
-        <pointsMaterial
-          size={0.2}
-          map={sprite}
-          color="#c2cde6"
-          transparent
-          opacity={0.6}
-          sizeAttenuation
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-          fog={false}
-        />
-      </points>
+      {layers.map((layer, i) => (
+        <points key={i}>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[layer.positions, 3]} />
+            <bufferAttribute attach="attributes-color" args={[layer.colors, 3]} />
+          </bufferGeometry>
+          <pointsMaterial
+            size={layer.size}
+            map={layer.glint ? glint : soft}
+            vertexColors
+            transparent
+            sizeAttenuation
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+            fog={false}
+          />
+        </points>
+      ))}
     </group>
   );
 }
@@ -1173,7 +1187,7 @@ export default function FacadeScene({
         shadow-camera-far={90}
         shadow-bias={-0.0004}
       />
-      <Stars />
+      <Stars highQuality={highQuality} />
 
       {/* Terre sableuse de l'esplanade */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 8]} receiveShadow>
