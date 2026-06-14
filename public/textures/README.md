@@ -33,6 +33,8 @@ Exemple : `public/textures/sol-exterieur/diff.jpg`, `nor_gl.jpg`, `rough.jpg`.
 | `sol-exterieur/` | Le sol sableux du parvis, devant le temple                     |
 | `murs-facade/`   | Les murs derrière et à côté des colonnes (le « quadrillage »)  |
 | `escaliers/`     | Le grand escalier d'accès                                      |
+| `ruines/`        | Les pierres éparses au sol (les gros vestiges restent en marbre) |
+| `arbres/`        | Le feuillage des cyprès (la partie verte)                      |
 
 > Tu veux le **même** rendu sur les murs et les escaliers ? Mets les mêmes
 > fichiers dans les deux dossiers, ou remplis seulement `murs-facade/` et
