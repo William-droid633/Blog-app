@@ -19,6 +19,11 @@ export const STAIR_FILES = {
   normalMap: "/textures/escaliers/floor_tiles_02_nor_gl_1k.jpg",
   roughnessMap: "/textures/escaliers/floor_tiles_02_rough_1k.jpg",
 };
+export const ROCK_FILES = {
+  map: "/textures/ruines/marble_rock_02_diff_1k.jpg",
+  normalMap: "/textures/ruines/marble_rock_02_nor_gl_1k.jpg",
+  roughnessMap: "/textures/ruines/marble_rock_02_rough_1k.jpg",
+};
 
 /**
  * Charge une texture PBR externe (couleur sRGB + normal GL + roughness linéaire)

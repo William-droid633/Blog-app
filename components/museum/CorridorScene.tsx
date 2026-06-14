@@ -680,6 +680,7 @@ export default function CorridorScene({
 
   const wallBase = usePbrSurface(WALL_FILES, 1, 1);
   const wall = useMemo(() => setRepeat(cloneSurface(wallBase), length / 6, 1), [wallBase, length]);
+  const apseWall = useMemo(() => setRepeat(cloneSurface(wallBase), 2, 1), [wallBase]);
   const entranceWall = useMemo(() => setRepeat(travertineSurface(), 2.2, 1.6), []);
   const floor = useMemo(() => setRepeat(floorSurface(), 2, length / 8), [length]);
   const marble = useMemo(() => marbleSurface(), []);
@@ -993,7 +994,7 @@ export default function CorridorScene({
       {/* Mur courbe en hémicycle */}
       <mesh position={[0, HALL_HEIGHT / 2, bottomZ]} receiveShadow>
         <cylinderGeometry args={[HALL_WIDTH / 2, HALL_WIDTH / 2, HALL_HEIGHT, 32, 1, true, Math.PI / 2, Math.PI]} />
-        <meshStandardMaterial {...entranceWall} bumpScale={0.9} side={THREE.BackSide} />
+        <meshStandardMaterial {...apseWall} bumpScale={0.9} side={THREE.BackSide} />
       </mesh>
       {/* Demi-coupole à caissons coiffant l'abside */}
       <mesh position={[0, HALL_HEIGHT, bottomZ]}>
@@ -1013,7 +1014,7 @@ export default function CorridorScene({
 
       {/* Inscription MEMORIA gravée sur le mur de l'abside (WebGL) */}
       <mesh position={[0, 4.5, bottomZ + 0.55]}>
-        <planeGeometry args={[3.9, 0.49]} />
+        <planeGeometry args={[4.6, 0.58]} />
         <meshBasicMaterial map={memoria} transparent depthWrite={false} toneMapped={false} />
       </mesh>
 

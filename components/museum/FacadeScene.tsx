@@ -21,7 +21,7 @@ import {
   cloneSurface,
   type SurfaceMaps,
 } from "./textures";
-import { GROUND_FILES, WALL_FILES, STAIR_FILES, usePbrSurface } from "./pbr";
+import { GROUND_FILES, WALL_FILES, STAIR_FILES, ROCK_FILES, usePbrSurface } from "./pbr";
 
 /* — Proportions monumentales (octastyle) — */
 const COLUMN_COUNT = 8;
@@ -822,10 +822,12 @@ function ScatterStones() {
     return list;
   }, []);
 
+  const rock = usePbrSurface(ROCK_FILES, 1, 1);
+
   return (
     <Instances limit={items.length} castShadow receiveShadow>
       <dodecahedronGeometry args={[1, 0]} />
-      <meshStandardMaterial color="#8f8576" roughness={0.95} />
+      <meshStandardMaterial {...rock} />
       {items.map((item, i) => (
         <Instance
           key={i}
