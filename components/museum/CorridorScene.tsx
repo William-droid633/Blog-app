@@ -878,7 +878,7 @@ export default function CorridorScene({
           map={coffer}
           emissiveMap={coffer}
           emissive="#ffffff"
-          emissiveIntensity={0.38}
+          emissiveIntensity={0.6}
           roughness={0.85}
         />
         {bayZs.map((z) => (
@@ -891,7 +891,7 @@ export default function CorridorScene({
           map={coffer}
           emissiveMap={coffer}
           emissive="#ffffff"
-          emissiveIntensity={0.38}
+          emissiveIntensity={0.6}
           roughness={0.85}
         />
         {bayZs.map((z) =>
@@ -1015,7 +1015,7 @@ export default function CorridorScene({
           map={coffer}
           emissiveMap={coffer}
           emissive="#ffffff"
-          emissiveIntensity={0.3}
+          emissiveIntensity={0.5}
           roughness={0.85}
           side={THREE.BackSide}
         />

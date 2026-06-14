@@ -374,8 +374,8 @@ export function cofferTexture(size = 256): THREE.CanvasTexture {
 
   // Fond bleu nuit nuagé
   const img = ctx.createImageData(size, size);
-  const deep = hexToRgb("#161d33");
-  const mid = hexToRgb("#232c4d");
+  const deep = hexToRgb("#27396b");
+  const mid = hexToRgb("#3a4f8e");
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
       const u = px / size;
@@ -541,18 +541,32 @@ function drawInscription(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2
       getComputedStyle(document.documentElement).getPropertyValue("--font-display").trim()) ||
     "";
   const fontStack = family ? `${family}, Georgia, serif` : "Georgia, serif";
-  const fontSize = canvas.height * 0.56;
+  let fontSize = canvas.height * 0.56;
+  let tracking = fontSize * 0.5;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.font = `700 ${fontSize}px ${fontStack}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
 
   // Lettrage espacé, centré (interlettrage manuel : fiable partout)
-  const tracking = fontSize * 0.5;
   const chars = Array.from(text);
-  const widths = chars.map((c) => ctx.measureText(c).width);
-  const total = widths.reduce((a, b) => a + b, 0) + tracking * (chars.length - 1);
+  const measure = () => {
+    ctx.font = `700 ${fontSize}px ${fontStack}`;
+    const list = chars.map((c) => ctx.measureText(c).width);
+    return { list, total: list.reduce((a, b) => a + b, 0) + tracking * (chars.length - 1) };
+  };
+  let { list: widths, total } = measure();
+  // Auto-ajustement : on réduit la taille pour que TOUT le texte tienne dans
+  // le canevas (sinon les lettres de bord — le H et le dernier M — débordaient
+  // et disparaissaient).
+  const maxWidth = canvas.width * 0.92;
+  if (total > maxWidth) {
+    const fit = maxWidth / total;
+    fontSize *= fit;
+    tracking *= fit;
+    ({ list: widths, total } = measure());
+  }
+  ctx.font = `700 ${fontSize}px ${fontStack}`;
   const startX = (canvas.width - total) / 2;
   const cy = canvas.height / 2;
 
@@ -1045,17 +1059,22 @@ export function flameTexture(size = 128): THREE.CanvasTexture {
         0.34 *
         Math.pow(Math.sin(Math.PI * Math.min(1, h * 0.92 + 0.04)), 0.85) *
         (1 - h * 0.55);
-      const waver = (fbm(u * 3 + 7.7, h * 5.2 + 1.3, 3) - 0.5) * 0.12 * h;
+      const waver =
+        (fbm(u * 3 + 7.7, h * 5.2 + 1.3, 3) - 0.5) * 0.16 * h +
+        (fbm(u * 7 + 2.1, h * 11 + 4.4, 2) - 0.5) * 0.07 * h * h;
       const d = Math.abs(u - waver) / Math.max(width, 0.001);
       let a = Math.max(0, 1 - d);
-      a = Math.pow(a, 1.6) * Math.pow(Math.min(1, h * 6), 1.2);
-      const core = Math.pow(a, 3) * (1 - h * 0.35);
+      a = Math.pow(a, 1.5) * Math.pow(Math.min(1, h * 6), 1.2);
+      // Vacuoles : petites respirations sombres dans le corps de la flamme
+      a *= 0.78 + 0.22 * fbm(u * 9 + 3.3, h * 7 - 1.7, 3);
+      const core = Math.pow(a, 2.6) * (1 - h * 0.3);
 
       const i = (py * size + px) * 4;
+      // Cœur blanc-jaune → corps orange → pointe rouge
       data[i] = 255;
-      data[i + 1] = Math.min(255, Math.round(110 + core * 135 + a * 35));
-      data[i + 2] = Math.min(255, Math.round(24 + core * 215));
-      data[i + 3] = Math.round(Math.min(1, a * 1.25) * 255);
+      data[i + 1] = Math.min(255, Math.round(96 + core * 150 + a * 40 - h * 30));
+      data[i + 2] = Math.min(255, Math.round(20 + core * 225 - h * 12));
+      data[i + 3] = Math.round(Math.min(1, a * 1.3) * 255);
     }
   }
   ctx.putImageData(img, 0, 0);
