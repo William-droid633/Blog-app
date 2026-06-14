@@ -8,7 +8,6 @@ import type { Post } from "@/lib/types";
 import Painting, { ART_Y, ART_WIDTH, ART_HEIGHT, type PaintingPlacement } from "./Painting";
 import {
   travertineSurface,
-  ashlarSurface,
   floorSurface,
   marbleSurface,
   fluteTexture,
@@ -24,6 +23,7 @@ import {
   cloneSurface,
   type SurfaceMaps,
 } from "./textures";
+import { WALL_FILES, usePbrSurface } from "./pbr";
 
 /* — Géométrie du couloir — */
 export const HALL_WIDTH = 8;
@@ -678,7 +678,8 @@ export default function CorridorScene({
   const length = topZ - bottomZ;
   const centerZ = (topZ + bottomZ) / 2;
 
-  const wall = useMemo(() => setRepeat(cloneSurface(ashlarSurface()), length / 6, 1), [length]);
+  const wallBase = usePbrSurface(WALL_FILES, 1, 1);
+  const wall = useMemo(() => setRepeat(cloneSurface(wallBase), length / 6, 1), [wallBase, length]);
   const entranceWall = useMemo(() => setRepeat(travertineSurface(), 2.2, 1.6), []);
   const floor = useMemo(() => setRepeat(floorSurface(), 2, length / 8), [length]);
   const marble = useMemo(() => marbleSurface(), []);

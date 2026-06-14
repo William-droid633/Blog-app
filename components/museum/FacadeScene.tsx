@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Instances, Instance, Environment, Lightformer, useTexture } from "@react-three/drei";
+import { Instances, Instance, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import { fbm } from "./noise";
 import {
@@ -21,6 +21,7 @@ import {
   cloneSurface,
   type SurfaceMaps,
 } from "./textures";
+import { GROUND_FILES, WALL_FILES, STAIR_FILES, usePbrSurface } from "./pbr";
 
 /* — Proportions monumentales (octastyle) — */
 const COLUMN_COUNT = 8;
@@ -62,52 +63,6 @@ function glowCanvas(color: string): HTMLCanvasElement {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 128, 128);
   return canvas;
-}
-
-/* — Textures PBR externes (Poly Haven, CC0) déposées dans public/textures — */
-const GROUND_FILES = {
-  map: "/textures/sol-exterieur/grassy_cobblestone_diff_1k.jpg",
-  normalMap: "/textures/sol-exterieur/grassy_cobblestone_nor_gl_1k.jpg",
-  roughnessMap: "/textures/sol-exterieur/grassy_cobblestone_rough_1k.jpg",
-};
-const WALL_FILES = {
-  map: "/textures/murs-facade/marble_01_diff_1k.jpg",
-  normalMap: "/textures/murs-facade/marble_01_nor_gl_1k.jpg",
-  roughnessMap: "/textures/murs-facade/marble_01_rough_1k.jpg",
-};
-const STAIR_FILES = {
-  map: "/textures/escaliers/floor_tiles_02_diff_1k.jpg",
-  normalMap: "/textures/escaliers/floor_tiles_02_nor_gl_1k.jpg",
-  roughnessMap: "/textures/escaliers/floor_tiles_02_rough_1k.jpg",
-};
-
-/**
- * Charge une texture PBR externe (couleur sRGB + normal GL + roughness linéaire)
- * et la renvoie au format SurfaceMaps, prête à être étalée sur un
- * meshStandardMaterial comme les matériaux procéduraux. Tuilage repeatX/repeatY.
- */
-function usePbrSurface(
-  files: { map: string; normalMap: string; roughnessMap: string },
-  repeatX: number,
-  repeatY: number
-): SurfaceMaps {
-  const maps = useTexture(files) as {
-    map: THREE.Texture;
-    normalMap: THREE.Texture;
-    roughnessMap: THREE.Texture;
-  };
-  return useMemo(() => {
-    maps.map.colorSpace = THREE.SRGBColorSpace;
-    maps.normalMap.colorSpace = THREE.NoColorSpace;
-    maps.roughnessMap.colorSpace = THREE.NoColorSpace;
-    for (const t of [maps.map, maps.normalMap, maps.roughnessMap]) {
-      t.wrapS = THREE.RepeatWrapping;
-      t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(repeatX, repeatY);
-      t.anisotropy = 8;
-    }
-    return maps as unknown as SurfaceMaps;
-  }, [maps, repeatX, repeatY]);
 }
 
 /** Dôme céleste : nébuleuse colorée (gaz chaud, cœur bleu, poussières)
