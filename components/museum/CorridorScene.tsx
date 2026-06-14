@@ -874,14 +874,26 @@ export default function CorridorScene({
       {/* Panneaux peints en retrait : bleu nuit étoilé d'or */}
       <Instances limit={bayZs.length}>
         <planeGeometry args={[3.5, 2.42]} />
-        <meshStandardMaterial map={coffer} roughness={0.85} />
+        <meshStandardMaterial
+          map={coffer}
+          emissiveMap={coffer}
+          emissive="#ffffff"
+          emissiveIntensity={0.38}
+          roughness={0.85}
+        />
         {bayZs.map((z) => (
           <Instance key={`cc-${z}`} position={[0, HALL_HEIGHT + 0.3, z]} rotation={[Math.PI / 2, 0, 0]} />
         ))}
       </Instances>
       <Instances limit={bayZs.length * 2}>
         <planeGeometry args={[1.7, 2.42]} />
-        <meshStandardMaterial map={coffer} roughness={0.85} />
+        <meshStandardMaterial
+          map={coffer}
+          emissiveMap={coffer}
+          emissive="#ffffff"
+          emissiveIntensity={0.38}
+          roughness={0.85}
+        />
         {bayZs.map((z) =>
           [-3.05, 3.05].map((x) => (
             <Instance key={`cs-${z}-${x}`} position={[x, HALL_HEIGHT + 0.3, z]} rotation={[Math.PI / 2, 0, 0]} />
@@ -999,7 +1011,14 @@ export default function CorridorScene({
       {/* Demi-coupole à caissons coiffant l'abside */}
       <mesh position={[0, HALL_HEIGHT, bottomZ]}>
         <sphereGeometry args={[HALL_WIDTH / 2, 32, 14, Math.PI / 2, Math.PI, 0, Math.PI / 2]} />
-        <meshStandardMaterial map={coffer} roughness={0.85} side={THREE.BackSide} />
+        <meshStandardMaterial
+          map={coffer}
+          emissiveMap={coffer}
+          emissive="#ffffff"
+          emissiveIntensity={0.3}
+          roughness={0.85}
+          side={THREE.BackSide}
+        />
       </mesh>
       {/* Corniche dorée à la naissance de la coupole */}
       <mesh position={[0, HALL_HEIGHT - 0.05, bottomZ]} rotation={[Math.PI / 2, 0, 0]}>

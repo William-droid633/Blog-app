@@ -715,12 +715,14 @@ function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
     const points = profile.map(
       ([r, h]) => new THREE.Vector2(Math.max(r * maxR, 0.012), h * height)
     );
-    const geo = new THREE.LatheGeometry(points, 22);
+    const geo = new THREE.LatheGeometry(points, 28);
 
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
-    const dark = new THREE.Color("#11240f");
-    const light = new THREE.Color("#33522a");
+    // Trois verts : creux très sombre → masse moyenne → pointes ensoleillées
+    const shadow = new THREE.Color("#0f2412");
+    const mid = new THREE.Color("#274a20");
+    const sun = new THREE.Color("#5c7f3b");
     const tint = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
@@ -730,12 +732,14 @@ function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
       const hn = vy / height;
       // Déplacement radial : masses de feuillage irrégulières
       const n = fbm(Math.cos(a) * 1.8 + seed, Math.sin(a) * 1.8 + hn * 7, 3);
-      const k = 0.74 + n * 0.56;
+      const k = 0.72 + n * 0.6;
       pos.setX(i, vx * k);
       pos.setZ(i, vz * k);
-      // Teinte : creux sombres, masses exposées plus claires
+      // Exposition : creux sombres, masses saillantes et hautes plus claires
       const n2 = fbm(Math.cos(a) * 3 + seed + 5, hn * 11 + Math.sin(a) * 3, 3);
-      tint.copy(dark).lerp(light, Math.max(0, n2 * 1.3 - 0.2) * (0.35 + hn * 0.65));
+      const exposure = Math.min(1, Math.max(0, n2 * 1.35 - 0.18) * (0.32 + hn * 0.68));
+      if (exposure < 0.5) tint.copy(shadow).lerp(mid, exposure * 2);
+      else tint.copy(mid).lerp(sun, (exposure - 0.5) * 2);
       colors[i * 3] = tint.r;
       colors[i * 3 + 1] = tint.g;
       colors[i * 3 + 2] = tint.b;
@@ -840,42 +844,40 @@ function ScatterStones() {
   );
 }
 
-/** Vestiges épars : tambours, chapiteau brisé, fragment d'architrave. */
-function Ruins({
-  marble,
-  marbleWall,
-  blob,
-}: {
-  marble: SurfaceMaps;
-  marbleWall: SurfaceMaps;
-  blob: THREE.Texture;
-}) {
+/** Vestiges épars : tambours, chapiteau brisé, fragment d'architrave —
+ *  même pierre que les petits débris (marble_rock_02), à fort relief. */
+function Ruins({ blob }: { blob: THREE.Texture }) {
+  const rockBase = usePbrSurface(ROCK_FILES, 1, 1);
+  const rock = useMemo(() => setRepeat(cloneSurface(rockBase), 1.6, 1.6), [rockBase]);
+  // Relief marqué : la carte de normales est poussée pour des débris rugueux.
+  const relief = useMemo(() => new THREE.Vector2(1.7, 1.7), []);
+
   return (
     <group>
       {/* Tambour effondré, à demi enfoui */}
       <mesh position={[12.5, 0.42, 12]} rotation={[0, 0.6, Math.PI / 2]} castShadow receiveShadow>
         <cylinderGeometry args={[0.55, 0.55, 1.9, 22]} />
-        <meshStandardMaterial {...marble} bumpScale={0.7} />
+        <meshStandardMaterial {...rock} normalScale={relief} />
       </mesh>
-      {/* Bloc de travertin renversé */}
+      {/* Bloc renversé */}
       <mesh position={[-11.5, 0.26, 13.5]} rotation={[0.1, 0.9, 0.06]} castShadow receiveShadow>
         <boxGeometry args={[1.5, 0.7, 1.1]} />
-        <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+        <meshStandardMaterial {...rock} normalScale={relief} />
       </mesh>
 
       {/* Pile de tambours d'une colonne disparue, le dernier basculé */}
       <group position={[17.5, 0, 2]}>
         <mesh position={[0, 0.4, 0]} castShadow receiveShadow>
           <cylinderGeometry args={[0.6, 0.63, 0.85, 22]} />
-          <meshStandardMaterial {...marble} bumpScale={0.7} />
+          <meshStandardMaterial {...rock} normalScale={relief} />
         </mesh>
         <mesh position={[0.07, 1.2, -0.04]} rotation={[0.07, 0.5, 0.05]} castShadow receiveShadow>
           <cylinderGeometry args={[0.58, 0.6, 0.78, 22]} />
-          <meshStandardMaterial {...marble} bumpScale={0.7} />
+          <meshStandardMaterial {...rock} normalScale={relief} />
         </mesh>
         <mesh position={[1.7, 0.46, 1.5]} rotation={[Math.PI / 2 - 0.1, 0, 0.8]} castShadow receiveShadow>
           <cylinderGeometry args={[0.56, 0.56, 0.8, 22]} />
-          <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+          <meshStandardMaterial {...rock} normalScale={relief} />
         </mesh>
       </group>
 
@@ -883,16 +885,16 @@ function Ruins({
       <group position={[-16, 0.32, 8]} rotation={[0.4, 0.7, 0.18]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[1.3, 0.26, 1.3]} />
-          <meshStandardMaterial {...marble} bumpScale={0.7} />
+          <meshStandardMaterial {...rock} normalScale={relief} />
         </mesh>
         <mesh position={[0, -0.3, 0]} castShadow receiveShadow>
           <cylinderGeometry args={[0.45, 0.58, 0.36, 20]} />
-          <meshStandardMaterial {...marble} bumpScale={0.7} />
+          <meshStandardMaterial {...rock} normalScale={relief} />
         </mesh>
         {[-0.55, 0.55].map((vx) => (
           <mesh key={vx} position={[vx, -0.12, 0.62]} rotation={[Math.PI / 2, 0, 0]} castShadow>
             <torusGeometry args={[0.17, 0.07, 9, 18]} />
-            <meshStandardMaterial {...marble} bumpScale={0.7} />
+            <meshStandardMaterial {...rock} normalScale={relief} />
           </mesh>
         ))}
       </group>
@@ -901,15 +903,15 @@ function Ruins({
       <group position={[-9.5, 0.34, 18.5]} rotation={[0.06, -0.55, 0.12]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[2.6, 0.62, 0.8]} />
-          <meshStandardMaterial {...marbleWall} bumpScale={0.8} />
+          <meshStandardMaterial {...rock} normalScale={relief} />
         </mesh>
         <mesh position={[0, 0.18, 0.42]} castShadow>
           <boxGeometry args={[2.6, 0.18, 0.05]} />
-          <meshStandardMaterial {...marble} bumpScale={0.6} />
+          <meshStandardMaterial {...rock} normalScale={relief} />
         </mesh>
         <mesh position={[0, -0.08, 0.42]} castShadow>
           <boxGeometry args={[2.6, 0.14, 0.04]} />
-          <meshStandardMaterial {...marble} bumpScale={0.6} />
+          <meshStandardMaterial {...rock} normalScale={relief} />
         </mesh>
       </group>
 
@@ -1467,8 +1469,8 @@ export default function FacadeScene({
 
       {/* Inscription gravée dans la frise — dans la scène WebGL : elle vit
           et meurt avec le temple, plus d'apparition fantôme dans le blanc */}
-      <mesh position={[0, ENTAB_Y + 0.93, 1.27]}>
-        <planeGeometry args={[8.6, 1.075]} />
+      <mesh position={[0, ENTAB_Y + 0.93, 1.28]}>
+        <planeGeometry args={[9.8, 1.225]} />
         <meshBasicMaterial map={inscription} transparent depthWrite={false} toneMapped={false} />
       </mesh>
 
@@ -1505,7 +1507,7 @@ export default function FacadeScene({
       ))}
 
       {/* Vestiges épars */}
-      <Ruins marble={marble} marbleWall={marbleWall} blob={blob} />
+      <Ruins blob={blob} />
 
       {/* Ombres de contact au sol */}
       {columnXs.map((x) => (

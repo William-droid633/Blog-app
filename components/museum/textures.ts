@@ -558,8 +558,8 @@ function drawInscription(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2
 
   // Trois passes : creux sombre, rehaut clair, lettre dorée — effet gravé
   const passes: Array<[number, string]> = [
-    [4, "rgba(0,0,0,0.6)"],
-    [-3, "rgba(255,240,200,0.28)"],
+    [5, "rgba(0,0,0,0.72)"],
+    [-3, "rgba(255,246,214,0.42)"],
   ];
   for (const [dy, style] of passes) {
     ctx.fillStyle = style;
@@ -570,9 +570,9 @@ function drawInscription(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2
     });
   }
   const gold = ctx.createLinearGradient(0, cy - fontSize / 2, 0, cy + fontSize / 2);
-  gold.addColorStop(0, "#b5905a");
-  gold.addColorStop(0.5, "#9a7a45");
-  gold.addColorStop(1, "#7d6136");
+  gold.addColorStop(0, "#ecca84");
+  gold.addColorStop(0.5, "#cda25c");
+  gold.addColorStop(1, "#a87f43");
   ctx.fillStyle = gold;
   let x = startX;
   chars.forEach((c, i) => {
