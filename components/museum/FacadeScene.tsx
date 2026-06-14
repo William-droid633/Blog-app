@@ -253,132 +253,126 @@ function Statue({
   const m = mirror ? -1 : 1;
   const material = <meshStandardMaterial {...marble} bumpScale={0.62} color="#ece4d0" />;
 
-  const robe = useMemo(() => {
-    if (pose !== "toga") return null;
-    const profile: Array<[number, number]> = [
-      [0.06, 0],
-      [0.16, 0.02],
-      [0.13, 0.18],
-      [0.12, 0.38],
-      [0.14, 0.52],
-      [0.105, 0.68],
-      [0.085, 0.78],
-    ];
+  // Corps drapé tourné : une silhouette continue et lisse (comme une vraie
+  // statue) plutôt que des primitives empilées. Profil [rayon, hauteur].
+  const drape = useMemo(() => {
+    const profiles: Record<StatuePose, Array<[number, number]>> = {
+      hercules: [
+        [0.04, 0], [0.21, 0.04], [0.19, 0.16], [0.155, 0.32], [0.17, 0.46],
+        [0.185, 0.54], [0.155, 0.66], [0.12, 0.78], [0.09, 0.85],
+      ],
+      toga: [
+        [0.05, 0], [0.22, 0.04], [0.165, 0.18], [0.14, 0.36], [0.15, 0.52],
+        [0.13, 0.66], [0.105, 0.78], [0.078, 0.86],
+      ],
+      seated: [
+        [0.12, 0], [0.155, 0.16], [0.14, 0.34], [0.122, 0.5], [0.1, 0.66],
+        [0.08, 0.8],
+      ],
+      reclining: [
+        [0.06, 0], [0.16, 0.12], [0.185, 0.32], [0.17, 0.54], [0.13, 0.74],
+        [0.08, 0.9], [0.035, 1],
+      ],
+    };
     return new THREE.LatheGeometry(
-      profile.map(([r, y]) => new THREE.Vector2(r * h, y * h)),
-      20
+      profiles[pose].map(([r, y]) => new THREE.Vector2(Math.max(r * h, 0.012), y * h)),
+      22
     );
   }, [pose, h]);
 
   return (
     <group position={[x, 0, 0]}>
-      {pose === "hercules" && (
+      {(pose === "hercules" || pose === "toga") && (
         <>
-          {/* Jambes en appui décalé */}
-          <mesh position={[-0.07 * h, 0.24 * h, 0]} castShadow>
-            <cylinderGeometry args={[0.05 * h, 0.066 * h, 0.48 * h, 10]} />
+          {/* Corps drapé d'un seul tenant */}
+          <mesh geometry={drape} castShadow receiveShadow>
             {material}
           </mesh>
-          <mesh position={[0.09 * h, 0.23 * h, 0.04 * h]} rotation={[0.14, 0, -0.07]} castShadow>
-            <cylinderGeometry args={[0.05 * h, 0.066 * h, 0.46 * h, 10]} />
+          {/* Épaules arrondies */}
+          <mesh position={[0, 0.82 * h, 0]} scale={[1.55, 0.6, 1]} castShadow>
+            <sphereGeometry args={[0.12 * h, 18, 14]} />
             {material}
           </mesh>
-          {/* Torse en V */}
-          <mesh position={[0, 0.62 * h, 0]} castShadow>
-            <cylinderGeometry args={[0.135 * h, 0.095 * h, 0.34 * h, 12]} />
+          {/* Cou puis tête galbée */}
+          <mesh position={[0, 0.88 * h, 0]} castShadow>
+            <cylinderGeometry args={[0.038 * h, 0.05 * h, 0.09 * h, 12]} />
             {material}
           </mesh>
-          <mesh position={[0, 0.79 * h, 0]} scale={[1.45, 0.55, 0.95]} castShadow>
-            <sphereGeometry args={[0.115 * h, 12, 10]} />
+          <mesh position={[0, 0.95 * h, 0]} scale={[0.92, 1.12, 0.96]} castShadow>
+            <sphereGeometry args={[0.07 * h, 20, 16]} />
             {material}
           </mesh>
-          {/* Tête */}
-          <mesh position={[0, 0.9 * h, 0.01 * h]} castShadow>
-            <sphereGeometry args={[0.078 * h, 12, 10]} />
-            {material}
-          </mesh>
-          {/* Bras droit descendant vers la massue */}
-          <mesh position={[0.17 * h * m, 0.6 * h, 0.02 * h]} rotation={[0, 0, -0.5 * m]} castShadow>
-            <cylinderGeometry args={[0.032 * h, 0.04 * h, 0.36 * h, 8]} />
-            {material}
-          </mesh>
-          {/* Massue posée au sol */}
-          <mesh position={[0.28 * h * m, 0.26 * h, 0.06 * h]} rotation={[0.1, 0, 0.18 * m]} castShadow>
-            <cylinderGeometry args={[0.055 * h, 0.02 * h, 0.5 * h, 9]} />
-            {material}
-          </mesh>
-          {/* Bras gauche replié, peau du lion de Némée sur l'avant-bras */}
-          <mesh position={[-0.16 * h * m, 0.68 * h, 0.05 * h]} rotation={[0.4, 0, 0.9 * m]} castShadow>
-            <cylinderGeometry args={[0.03 * h, 0.038 * h, 0.3 * h, 8]} />
-            {material}
-          </mesh>
-          <mesh position={[-0.25 * h * m, 0.5 * h, 0.05 * h]} rotation={[0.15, 0, 0.12 * m]} castShadow>
-            <coneGeometry args={[0.09 * h, 0.36 * h, 8]} />
-            {material}
-          </mesh>
-        </>
-      )}
-
-      {pose === "toga" && robe && (
-        <>
-          {/* Drapé tombant jusqu'aux pieds */}
-          <mesh geometry={robe} castShadow>
-            {material}
-          </mesh>
-          <mesh position={[0, 0.8 * h, 0]} scale={[1.35, 0.5, 0.85]} castShadow>
-            <sphereGeometry args={[0.1 * h, 12, 10]} />
-            {material}
-          </mesh>
-          <mesh position={[0, 0.895 * h, 0.005 * h]} castShadow>
-            <sphereGeometry args={[0.07 * h, 12, 10]} />
-            {material}
-          </mesh>
-          {/* Bras levé tenant la lance / le sceptre */}
-          <mesh position={[0.15 * h * m, 0.68 * h, 0.02 * h]} rotation={[0, 0, -0.85 * m]} castShadow>
-            <cylinderGeometry args={[0.028 * h, 0.035 * h, 0.3 * h, 8]} />
-            {material}
-          </mesh>
-          <mesh position={[0.235 * h * m, 0.5 * h, 0.03 * h]} castShadow>
-            <cylinderGeometry args={[0.012 * h, 0.012 * h, 0.95 * h, 6]} />
-            {material}
-          </mesh>
+          {pose === "hercules" ? (
+            <>
+              {/* Bras droit le long du corps */}
+              <mesh position={[0.19 * h * m, 0.6 * h, 0.05 * h]} rotation={[0.1, 0, -0.16 * m]} castShadow>
+                <capsuleGeometry args={[0.04 * h, 0.34 * h, 4, 12]} />
+                {material}
+              </mesh>
+              {/* Massue dressée */}
+              <mesh position={[0.31 * h * m, 0.36 * h, 0.06 * h]} rotation={[0.16, 0, 0.14 * m]} castShadow>
+                <capsuleGeometry args={[0.05 * h, 0.46 * h, 5, 10]} />
+                {material}
+              </mesh>
+              {/* Bras gauche replié (peau de lion) */}
+              <mesh position={[-0.17 * h * m, 0.64 * h, 0.08 * h]} rotation={[0.2, 0, 0.85 * m]} castShadow>
+                <capsuleGeometry args={[0.04 * h, 0.26 * h, 4, 12]} />
+                {material}
+              </mesh>
+            </>
+          ) : (
+            <>
+              {/* Bras levé tenant le sceptre */}
+              <mesh position={[0.17 * h * m, 0.72 * h, 0.04 * h]} rotation={[0, 0, -0.72 * m]} castShadow>
+                <capsuleGeometry args={[0.035 * h, 0.3 * h, 4, 12]} />
+                {material}
+              </mesh>
+              <mesh position={[0.28 * h * m, 0.58 * h, 0.05 * h]} castShadow>
+                <capsuleGeometry args={[0.014 * h, 0.86 * h, 3, 8]} />
+                {material}
+              </mesh>
+              {/* Bras le long du corps */}
+              <mesh position={[-0.18 * h * m, 0.58 * h, 0.04 * h]} rotation={[0, 0, 0.14 * m]} castShadow>
+                <capsuleGeometry args={[0.034 * h, 0.32 * h, 4, 12]} />
+                {material}
+              </mesh>
+            </>
+          )}
         </>
       )}
 
       {pose === "seated" && (
         <>
           {/* Siège */}
-          <mesh position={[0, 0.17 * h, -0.06 * h]} castShadow>
-            <boxGeometry args={[0.3 * h, 0.34 * h, 0.26 * h]} />
+          <mesh position={[0, 0.17 * h, -0.1 * h]} castShadow>
+            <boxGeometry args={[0.36 * h, 0.34 * h, 0.3 * h]} />
             {material}
           </mesh>
-          {/* Cuisses, jambes */}
-          <mesh position={[0, 0.39 * h, 0.08 * h]} castShadow>
-            <boxGeometry args={[0.24 * h, 0.11 * h, 0.32 * h]} />
+          {/* Cuisses drapées (galbe lisse) */}
+          <mesh position={[0, 0.4 * h, 0.12 * h]} scale={[1, 0.62, 1.7]} castShadow>
+            <sphereGeometry args={[0.16 * h, 18, 12]} />
             {material}
           </mesh>
-          {[-0.07, 0.07].map((dx) => (
-            <mesh key={dx} position={[dx * h, 0.17 * h, 0.21 * h]} castShadow>
-              <cylinderGeometry args={[0.038 * h, 0.045 * h, 0.34 * h, 8]} />
-              {material}
-            </mesh>
-          ))}
-          {/* Buste, épaules, tête */}
-          <mesh position={[0, 0.61 * h, -0.02 * h]} castShadow>
-            <cylinderGeometry args={[0.11 * h, 0.085 * h, 0.34 * h, 10]} />
+          {/* Buste drapé */}
+          <mesh geometry={drape} position={[0, 0.36 * h, -0.05 * h]} castShadow receiveShadow>
             {material}
           </mesh>
-          <mesh position={[0, 0.79 * h, -0.02 * h]} scale={[1.35, 0.5, 0.85]} castShadow>
-            <sphereGeometry args={[0.095 * h, 12, 10]} />
+          <mesh position={[0, 0.72 * h, -0.05 * h]} scale={[1.4, 0.55, 1]} castShadow>
+            <sphereGeometry args={[0.1 * h, 18, 12]} />
             {material}
           </mesh>
-          <mesh position={[0, 0.88 * h, -0.01 * h]} castShadow>
-            <sphereGeometry args={[0.068 * h, 12, 10]} />
+          {/* Cou + tête */}
+          <mesh position={[0, 0.79 * h, -0.04 * h]} castShadow>
+            <cylinderGeometry args={[0.034 * h, 0.045 * h, 0.08 * h, 12]} />
             {material}
           </mesh>
-          {/* Bras posé sur la cuisse */}
-          <mesh position={[0.12 * h * m, 0.52 * h, 0.06 * h]} rotation={[0.9, 0, -0.2 * m]} castShadow>
-            <cylinderGeometry args={[0.026 * h, 0.034 * h, 0.3 * h, 8]} />
+          <mesh position={[0, 0.85 * h, -0.04 * h]} scale={[0.92, 1.1, 0.96]} castShadow>
+            <sphereGeometry args={[0.065 * h, 20, 16]} />
+            {material}
+          </mesh>
+          {/* Avant-bras posé sur la cuisse */}
+          <mesh position={[0.13 * h * m, 0.5 * h, 0.1 * h]} rotation={[1.05, 0, -0.18 * m]} castShadow>
+            <capsuleGeometry args={[0.033 * h, 0.3 * h, 4, 12]} />
             {material}
           </mesh>
         </>
@@ -386,23 +380,29 @@ function Statue({
 
       {pose === "reclining" && (
         <>
-          {/* Corps allongé, tête tournée vers le centre */}
-          <mesh position={[0.18 * h * m, 0.24 * h, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-            <cylinderGeometry args={[0.14 * h, 0.17 * h, 1.05 * h, 10]} />
+          {/* Corps allongé drapé (profil tourné, couché) */}
+          <mesh
+            geometry={drape}
+            position={[0.24 * h * m, 0.2 * h, 0]}
+            rotation={[0, 0, Math.PI / 2]}
+            castShadow
+            receiveShadow
+          >
             {material}
           </mesh>
           {/* Buste relevé sur le coude */}
-          <mesh position={[-0.42 * h * m, 0.42 * h, 0]} rotation={[0, 0, 0.85 * m]} castShadow>
-            <cylinderGeometry args={[0.1 * h, 0.12 * h, 0.45 * h, 10]} />
+          <mesh position={[-0.4 * h * m, 0.38 * h, 0]} rotation={[0, 0, 0.82 * m]} castShadow>
+            <capsuleGeometry args={[0.1 * h, 0.3 * h, 5, 14]} />
             {material}
           </mesh>
-          <mesh position={[-0.56 * h * m, 0.6 * h, 0]} castShadow>
-            <sphereGeometry args={[0.085 * h, 12, 10]} />
+          {/* Tête */}
+          <mesh position={[-0.56 * h * m, 0.56 * h, 0]} scale={[0.92, 1.1, 0.96]} castShadow>
+            <sphereGeometry args={[0.072 * h, 20, 16]} />
             {material}
           </mesh>
-          {/* Coude d'appui */}
-          <mesh position={[-0.52 * h * m, 0.22 * h, 0.02 * h]} castShadow>
-            <cylinderGeometry args={[0.035 * h, 0.045 * h, 0.4 * h, 8]} />
+          {/* Bras d'appui */}
+          <mesh position={[-0.5 * h * m, 0.2 * h, 0.05 * h]} rotation={[0, 0, 0.18 * m]} castShadow>
+            <capsuleGeometry args={[0.036 * h, 0.32 * h, 4, 12]} />
             {material}
           </mesh>
         </>
@@ -732,7 +732,8 @@ function Cypress({ x, z, height }: { x: number; z: number; height: number }) {
       const hn = vy / height;
       // Déplacement radial : masses de feuillage irrégulières
       const n = fbm(Math.cos(a) * 1.8 + seed, Math.sin(a) * 1.8 + hn * 7, 3);
-      const k = 0.72 + n * 0.6;
+      const fine = fbm(Math.cos(a) * 4 + seed + 9, Math.sin(a) * 4 + hn * 15, 2);
+      const k = 0.7 + n * 0.62 + (fine - 0.5) * 0.18; // grosses masses + touffes
       pos.setX(i, vx * k);
       pos.setZ(i, vz * k);
       // Exposition : creux sombres, masses saillantes et hautes plus claires
