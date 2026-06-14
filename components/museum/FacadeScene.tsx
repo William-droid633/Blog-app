@@ -251,7 +251,7 @@ function Statue({
   marble: SurfaceMaps;
 }) {
   const m = mirror ? -1 : 1;
-  const material = <meshStandardMaterial {...marble} bumpScale={0.4} color="#d8cfba" />;
+  const material = <meshStandardMaterial {...marble} bumpScale={0.62} color="#ece4d0" />;
 
   const robe = useMemo(() => {
     if (pose !== "toga") return null;
@@ -266,7 +266,7 @@ function Statue({
     ];
     return new THREE.LatheGeometry(
       profile.map(([r, y]) => new THREE.Vector2(r * h, y * h)),
-      14
+      20
     );
   }, [pose, h]);
 
@@ -473,7 +473,7 @@ function Pediment({ marble }: { marble: SurfaceMaps }) {
     <group position={[0, y, -1]}>
       {/* Tympan en retrait, légèrement assombri pour détacher les figures */}
       <mesh geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial {...marble} bumpScale={0.6} color="#c4bba6" />
+        <meshStandardMaterial {...marble} bumpScale={0.6} color="#b1a78c" />
       </mesh>
       {/* Corniches rampantes */}
       <mesh
@@ -620,18 +620,18 @@ function Torch({
       {/* Fût de bronze légèrement tronconique */}
       <mesh position={[0, 1.5, 0]} castShadow>
         <cylinderGeometry args={[0.055, 0.095, 2.3, 12]} />
-        <meshStandardMaterial color="#4a3a22" metalness={0.82} roughness={0.42} />
+        <meshStandardMaterial color="#5e4a26" metalness={0.9} roughness={0.38} />
       </mesh>
       {/* Bagues décoratives */}
       {[0.7, 1.55, 2.4].map((h) => (
         <mesh key={h} position={[0, h, 0]} rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[0.095, 0.022, 8, 18]} />
-          <meshStandardMaterial color="#8a6530" metalness={0.88} roughness={0.32} />
+          <meshStandardMaterial color="#a87f3e" metalness={0.92} roughness={0.26} />
         </mesh>
       ))}
       {/* Vasque */}
       <mesh geometry={bowl} position={[0, 2.62, 0]} castShadow>
-        <meshStandardMaterial color="#54421f" metalness={0.8} roughness={0.4} />
+        <meshStandardMaterial color="#6b5328" metalness={0.88} roughness={0.36} />
       </mesh>
       {/* Braises incandescentes */}
       <mesh position={[0, 3.04, 0]} scale={[1, 0.35, 1]}>
@@ -962,8 +962,8 @@ function PedimentLight() {
       <spotLight
         position={[0, ENTAB_Y - 1.2, 9]}
         target={target}
-        color="#d9b87a"
-        intensity={240}
+        color="#e0c089"
+        intensity={330}
         angle={0.5}
         penumbra={0.7}
         distance={30}
