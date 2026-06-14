@@ -2,15 +2,13 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Instances, Instance, Environment, Lightformer } from "@react-three/drei";
+import { Instances, Instance, Environment, Lightformer, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { fbm } from "./noise";
 import {
   marbleSurface,
   travertineSurface,
-  ashlarSurface,
   bronzeSurface,
-  sandSurface,
   fluteTexture,
   flameTexture,
   softParticleTexture,
@@ -64,6 +62,52 @@ function glowCanvas(color: string): HTMLCanvasElement {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 128, 128);
   return canvas;
+}
+
+/* — Textures PBR externes (Poly Haven, CC0) déposées dans public/textures — */
+const GROUND_FILES = {
+  map: "/textures/sol-exterieur/grassy_cobblestone_diff_1k.jpg",
+  normalMap: "/textures/sol-exterieur/grassy_cobblestone_nor_gl_1k.jpg",
+  roughnessMap: "/textures/sol-exterieur/grassy_cobblestone_rough_1k.jpg",
+};
+const WALL_FILES = {
+  map: "/textures/murs-facade/marble_01_diff_1k.jpg",
+  normalMap: "/textures/murs-facade/marble_01_nor_gl_1k.jpg",
+  roughnessMap: "/textures/murs-facade/marble_01_rough_1k.jpg",
+};
+const STAIR_FILES = {
+  map: "/textures/escaliers/floor_tiles_02_diff_1k.jpg",
+  normalMap: "/textures/escaliers/floor_tiles_02_nor_gl_1k.jpg",
+  roughnessMap: "/textures/escaliers/floor_tiles_02_rough_1k.jpg",
+};
+
+/**
+ * Charge une texture PBR externe (couleur sRGB + normal GL + roughness linéaire)
+ * et la renvoie au format SurfaceMaps, prête à être étalée sur un
+ * meshStandardMaterial comme les matériaux procéduraux. Tuilage repeatX/repeatY.
+ */
+function usePbrSurface(
+  files: { map: string; normalMap: string; roughnessMap: string },
+  repeatX: number,
+  repeatY: number
+): SurfaceMaps {
+  const maps = useTexture(files) as {
+    map: THREE.Texture;
+    normalMap: THREE.Texture;
+    roughnessMap: THREE.Texture;
+  };
+  return useMemo(() => {
+    maps.map.colorSpace = THREE.SRGBColorSpace;
+    maps.normalMap.colorSpace = THREE.NoColorSpace;
+    maps.roughnessMap.colorSpace = THREE.NoColorSpace;
+    for (const t of [maps.map, maps.normalMap, maps.roughnessMap]) {
+      t.wrapS = THREE.RepeatWrapping;
+      t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(repeatX, repeatY);
+      t.anisotropy = 8;
+    }
+    return maps as unknown as SurfaceMaps;
+  }, [maps, repeatX, repeatY]);
 }
 
 /** Dôme céleste : nébuleuse colorée (gaz chaud, cœur bleu, poussières)
@@ -1075,13 +1119,14 @@ export default function FacadeScene({
 
   const marble = useMemo(() => marbleSurface(), []);
   const marbleWall = useMemo(() => setRepeat(travertineSurface(), 4, 2.4), []);
-  const ashlar = useMemo(() => ashlarSurface(), []);
+  const ashlar = usePbrSurface(WALL_FILES, 1, 1);
   // Répétitions accordées par pan de mur : blocs de taille constante
   const cellaSide = useMemo(() => setRepeat(cloneSurface(ashlar), 1.35, 1.75), [ashlar]);
   const cellaTop = useMemo(() => setRepeat(cloneSurface(ashlar), 0.74, 0.6), [ashlar]);
   const antaeWall = useMemo(() => setRepeat(cloneSurface(ashlar), 1.05, 1.75), [ashlar]);
   const bronze = useMemo(() => bronzeSurface(), []);
-  const sand = useMemo(() => setRepeat(sandSurface(), 13, 13), []);
+  const sand = usePbrSurface(GROUND_FILES, 32, 32);
+  const stairs = usePbrSurface(STAIR_FILES, 8, 2);
   const flutes = useMemo(() => {
     const t = fluteTexture();
     t.repeat.set(4, 1);
@@ -1210,7 +1255,7 @@ export default function FacadeScene({
           <group key={i} position={[0, 0.14 + 0.28 * i, 5.4 - i * 0.62]}>
             <mesh castShadow receiveShadow>
               <boxGeometry args={[stairWidth, 0.28, depth]} />
-              <meshStandardMaterial {...marble} bumpScale={0.5} />
+              <meshStandardMaterial {...stairs} bumpScale={0.5} />
             </mesh>
             {/* Nez de marche saillant qui accroche la lumière */}
             <mesh position={[0, 0.125, depth / 2 - 0.04]} castShadow>
