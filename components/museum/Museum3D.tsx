@@ -68,6 +68,7 @@ export default function Museum3D({
   const [focus, setFocus] = useState<FocusState | null>(null);
   const [ready, setReady] = useState(false);
   const [veil, setVeil] = useState(true);
+  const veilStart = useRef(typeof performance !== "undefined" ? performance.now() : 0);
   const [flash, setFlash] = useState(false);
   // L'aide à la navigation ne s'affiche qu'un court instant à l'entrée du
   // couloir, puis s'efface pour ne plus gêner la contemplation.
@@ -105,7 +106,11 @@ export default function Museum3D({
   // Lever de rideau une fois la scène prête
   useEffect(() => {
     if (!ready) return;
-    const timer = setTimeout(() => setVeil(false), 350);
+    // Durée minimale d'affichage : sinon l'écran « HERKVL » flashe (voire ne
+    // se voit pas) sur mobile, où le contexte WebGL se crée très vite.
+    const shown = performance.now() - veilStart.current;
+    const wait = Math.max(350, 1100 - shown);
+    const timer = setTimeout(() => setVeil(false), wait);
     return () => clearTimeout(timer);
   }, [ready]);
 

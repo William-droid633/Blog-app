@@ -117,8 +117,12 @@ function CameraRig({
         targetLook.current.set(anchor.x, anchor.y - 0.5, anchor.z);
       }
     } else {
+      // En paysage (PC), on relève un peu la visée pour révéler le plafond
+      // peint, qui sort du cadre (vue plus étroite verticalement qu'en
+      // portrait, où il est déjà bien visible).
+      const lookUp = (camera as THREE.PerspectiveCamera).aspect > 1.2 ? 1.3 : 0;
       targetPos.current.set(0, EYE_HEIGHT, travelZ.current);
-      targetLook.current.set(0, EYE_HEIGHT, travelZ.current - 10);
+      targetLook.current.set(0, EYE_HEIGHT + lookUp, travelZ.current - 10);
     }
 
     const posLambda = focus?.diving ? 3.2 : 2.4;

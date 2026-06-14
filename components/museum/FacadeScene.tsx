@@ -1383,8 +1383,8 @@ export default function FacadeScene({
         <boxGeometry args={[BAY_WIDTH + 2.3, 0.32, 0.75]} />
         <meshStandardMaterial {...marble} bumpScale={0.5} />
       </mesh>
-      {/* Seuil de marbre usé */}
-      <mesh position={[0, doorSillY + 0.06, CELLA_Z + 0.3]} receiveShadow>
+      {/* Seuil de marbre usé, affleurant le sol du porche (pas de ressaut) */}
+      <mesh position={[0, doorSillY - 0.05, CELLA_Z + 0.3]} receiveShadow>
         <boxGeometry args={[BAY_WIDTH + 0.6, 0.12, 1.4]} />
         <meshStandardMaterial {...marble} bumpScale={0.4} color="#cfc6b0" />
       </mesh>
